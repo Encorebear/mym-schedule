@@ -1172,7 +1172,11 @@ function initStaffTags(existingStaff) {
     try {
       const parsed = JSON.parse(existingStaff);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        STAFF_CATS.forEach(c => { staffData[c] = Array.isArray(parsed[c]) ? parsed[c] : []; });
+        STAFF_CATS.forEach(c => {
+          staffData[c] = Array.isArray(parsed[c])
+            ? parsed[c].map(item => typeof item === 'string' ? {name: item, hours: ''} : item)
+            : [];
+        });
       }
     } catch(e) {
       if (existingStaff.trim()) staffData['기타'] = [existingStaff.trim()];
@@ -1184,17 +1188,22 @@ function initStaffTags(existingStaff) {
 function renderStaffTags() {
   const wrap = document.getElementById('staff-tags-wrap');
   if (!wrap) return;
-  // 인덱스 기반 ID 사용 (한글 ID 호환성 문제 방지)
   wrap.innerHTML = STAFF_CATS.map((cat, ci) => {
-    const tags = (staffData[cat]||[]).map((name, ti) =>
-      `<div class="staff-tag">${name}<button type="button" class="staff-tag-del" onclick="removeStaffTag(${ci},${ti})">×</button></div>`
-    ).join('');
+    const tags = (staffData[cat]||[]).map((item, ti) => {
+      const nm = typeof item === 'string' ? item : (item.name||'');
+      const hr = typeof item === 'string' ? '' : (item.hours||'');
+      const hrBadge = hr ? `<span style="background:rgba(99,179,237,0.25);color:#90cdf4;border-radius:3px;padding:0 4px;font-size:10px;margin-left:3px;">${hr}h</span>` : '';
+      return `<div class="staff-tag" style="cursor:pointer;" onclick="editStaffHours(${ci},${ti})" title="클릭하여 근무시간 수정">${nm}${hrBadge}<button type="button" class="staff-tag-del" onclick="event.stopPropagation();removeStaffTag(${ci},${ti})">×</button></div>`;
+    }).join('');
     return `<div class="staff-category">
       <div class="staff-cat-label">${cat}</div>
       <div class="staff-tags-row">
         ${tags}
-        <div class="staff-add-row">
-          <input type="text" class="staff-add-input" id="sinput-${ci}" placeholder="이름 입력"
+        <div class="staff-add-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+          <input type="text" class="staff-add-input" id="sinput-${ci}" placeholder="이름" style="flex:2;min-width:70px;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffTag(${ci});}">
+          <input type="number" class="staff-add-input" id="shours-${ci}" placeholder="시간(h)"
+            min="0" max="24" step="0.5" style="flex:1;min-width:60px;"
             onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffTag(${ci});}">
           <button type="button" class="staff-add-btn" onclick="addStaffTag(${ci})">+</button>
         </div>
@@ -1206,13 +1215,30 @@ function renderStaffTags() {
 
 function addStaffTag(ci) {
   const input = document.getElementById('sinput-' + ci);
+  const hoursEl = document.getElementById('shours-' + ci);
   const name = input ? input.value.trim() : '';
   if (!name) return;
+  const hours = hoursEl ? hoursEl.value.trim() : '';
   const cat = STAFF_CATS[ci];
   if (!staffData[cat]) staffData[cat] = [];
-  staffData[cat].push(name);
+  staffData[cat].push({name, hours});
+  if (input) input.value = '';
+  if (hoursEl) hoursEl.value = '';
   renderStaffTags();
   setTimeout(() => { const el = document.getElementById('sinput-' + ci); if (el) el.focus(); }, 30);
+}
+
+function editStaffHours(ci, ti) {
+  const cat = STAFF_CATS[ci];
+  const item = staffData[cat] && staffData[cat][ti];
+  if (!item) return;
+  const nm = typeof item === 'string' ? item : item.name;
+  const curHr = typeof item === 'string' ? '' : (item.hours||'');
+  const newHr = prompt(\`[\${nm}] 근무시간(h) 입력:\`, curHr);
+  if (newHr === null) return;
+  staffData[cat][ti] = {name: nm, hours: newHr.trim()};
+  renderStaffTags();
+  syncStaffHidden();
 }
 
 function removeStaffTag(ci, ti) {
@@ -1233,7 +1259,14 @@ function formatStaffDisplay(staffJson) {
     if (typeof obj !== 'object' || Array.isArray(obj)) return `<div>${staffJson}</div>`;
     return STAFF_CATS
       .filter(c => obj[c] && obj[c].length)
-      .map(c => `<div><span style="color:var(--text3);font-size:10px;">${c}</span> ${obj[c].join(', ')}</div>`)
+      .map(c => {
+        const members = obj[c].map(item => {
+          const nm = typeof item === 'string' ? item : (item.name||'');
+          const hr = typeof item === 'string' ? '' : (item.hours||'');
+          return hr ? `${nm}(${hr}h)` : nm;
+        }).join(', ');
+        return `<div><span style="color:var(--text3);font-size:10px;">${c}</span> ${members}</div>`;
+      })
       .join('');
   } catch(e) {
     return staffJson ? `<div>${staffJson}</div>` : '';
