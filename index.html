@@ -136,24 +136,29 @@
 
   /* ── CALENDAR ── */
   .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 4px 8px; }
+  .calendar-grid-wrap { overflow-x: hidden; }
   .cal-day {
-    background: var(--bg2); border-radius: 8px; min-height: 72px;
-    padding: 4px; cursor: pointer; border: 1px solid transparent;
-    transition: background 0.15s;
+    background: var(--bg2); border-radius: 8px; min-height: 36px;
+    padding: 4px 3px; cursor: pointer; border: 1px solid transparent;
+    transition: background 0.15s; vertical-align: top;
   }
   .cal-day:active { background: var(--bg3); }
   .cal-day.other-month { opacity: 0.3; }
   .cal-day.today { border-color: var(--accent); }
-  .day-num { font-size: 12px; font-weight: 600; color: var(--text2); line-height: 1; margin-bottom: 3px; display: block; }
-  .cal-day.today .day-num { color: var(--accent); }
-  .event-dots { display: flex; flex-direction: column; gap: 2px; }
+  .day-num {
+    font-size: 11px; font-weight: 600; color: var(--text2);
+    line-height: 1.6; display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; margin-bottom: 2px;
+  }
+  .cal-day.today .day-num { background: var(--accent); color: white; }
+  .event-dots { display: flex; flex-direction: column; gap: 1px; }
   .event-dot {
-    height: 14px; border-radius: 3px; font-size: 9px; font-weight: 600;
-    padding: 0 3px; line-height: 14px; white-space: nowrap;
+    height: 13px; border-radius: 3px; font-size: 8px; font-weight: 600;
+    padding: 0 3px; line-height: 13px; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; max-width: 100%;
     color: rgba(0,0,0,0.85);
   }
-  .more-count { font-size: 9px; color: var(--text3); padding: 0 2px; }
+  .more-count { font-size: 8px; color: var(--text3); padding: 0 2px; }
 
   /* ── FAB ── */
   .fab {
@@ -863,16 +868,16 @@ function renderCalendar() {
     let cls = 'cal-day' + (!current ? ' other-month' : '') + (isToday ? ' today' : '');
     const dayColor = dow === 0 ? 'color:#f87171' : (dow === 6 ? 'color:#a78bfa' : '');
     let dots = '';
-    events.slice(0, 3).forEach(ev => {
+    events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
-      const dotBg = isPrivate ? 'rgba(100,116,139,0.6)' : (ac.bg||'#3b82f6');
-      dots += `<div class="event-dot" style="background:${dotBg}">${label}</div>`;
+      const label = isPrivate ? '🔒' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
+      const dotBg = isPrivate ? 'rgba(100,116,139,0.6)' : (ac.bg||'rgba(59,130,246,0.15)');
+      const dotColor = isPrivate ? '#94a3b8' : (ac.color||'#3b82f6');
+      dots += `<div class="event-dot" style="background:${dotBg};color:${dotColor};">${label}</div>`;
     });
-    if (events.length > 3) dots += `<div class="more-count">+${events.length-3}개</div>`;
     html += `<div class="${cls}" onclick="openDaySheet('${key}')">
-      <span class="day-num" style="${dayColor}">${date.getDate()}</span>
+      <div class="day-num" style="${dayColor}">${date.getDate()}</div>
       <div class="event-dots">${dots}</div>
     </div>`;
   });
