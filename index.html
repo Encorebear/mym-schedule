@@ -1888,34 +1888,35 @@ function generateExcel() {
 
   const wb = XLSX.utils.book_new();
 
-  // ══ Sheet 1: 전체 일정 ══════════════════════════
-  const rows1 = [['날짜','요일','배우','유형','제목','시작','종료','장소','동행/스텝','스텝 총 근무시간(h)','메모']];
+  // ══ Sheet 1: 전체 일정 (스텝 1인 1행) ══════════
+  const rows1 = [['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무시간(h)','메모']];
   evts.forEach(ev => {
     const d = new Date(ev.date);
-    let staffStr = '', totalHours = 0;
+    const base = [ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+                  ev.startTime||'', ev.endTime||'', ev.location||''];
+    let hasStaff = false;
     if (ev.staff) {
       try {
-        const obj = JSON.parse(ev.staff); const parts = [];
+        const obj = JSON.parse(ev.staff);
         STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
           const nm = typeof item === 'string' ? item : (item.name||'');
-          const hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
+          const st = typeof item === 'string' ? '' : (item.startTime||'');
+          const en = typeof item === 'string' ? '' : (item.endTime||'');
+          const hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
           if (!nm) return;
-          parts.push(hr ? `${nm}(${hr}h)` : nm);
-          totalHours += hr;
+          rows1.push(base.concat([c, nm, st, en, hr, ev.memo||'']));
+          hasStaff = true;
         }));
-        staffStr = parts.join(', ');
       } catch(e) {}
     }
-    rows1.push([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-      ev.startTime||'', ev.endTime||'', ev.location||'',
-      staffStr, totalHours||'', ev.memo||'']);
+    if (!hasStaff) rows1.push(base.concat(['','','','','', ev.memo||'']));
   });
   const ws1 = XLSX.utils.aoa_to_sheet(rows1);
-  ws1['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:45},{wch:18},{wch:20}];
+  ws1['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8},{wch:12},{wch:20}];
   XLSX.utils.book_append_sheet(wb, ws1, '전체일정');
 
   // ══ Sheet 2: 스텝 근무 내역 (1인 1행) ══════════
-  const rows2 = [['날짜','요일','배우','유형','제목','시작','종료','장소','카테고리','스텝 이름','근무시간(h)']];
+  const rows2 = [['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝 이름','출근','퇴근','근무시간(h)']];
   evts.forEach(ev => {
     const d = new Date(ev.date);
     if (!ev.staff) return;
@@ -1923,16 +1924,18 @@ function generateExcel() {
       const obj = JSON.parse(ev.staff);
       STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
         const nm = typeof item === 'string' ? item : (item.name||'');
+        const st = typeof item === 'string' ? '' : (item.startTime||'');
+        const en = typeof item === 'string' ? '' : (item.endTime||'');
         const hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
         if (!nm) return;
         if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
         rows2.push([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-          ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, hr]);
+          ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, st, en, hr]);
       }));
     } catch(e) {}
   });
   const ws2 = XLSX.utils.aoa_to_sheet(rows2);
-  ws2['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:15},{wch:12}];
+  ws2['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:15},{wch:8},{wch:8},{wch:12}];
   XLSX.utils.book_append_sheet(wb, ws2, '스텝근무내역');
 
   // ══ Sheet 3: 스텝별 요약 (이름별 총 시간) ═══════
