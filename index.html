@@ -372,6 +372,7 @@
   .badge-viewer { background: rgba(100,116,139,0.2); color: var(--text3); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -580,6 +581,60 @@
     </div>
     <button class="btn-submit" onclick="changePassword()">비밀번호 변경</button>
     <div class="login-error" id="pw-error" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- EXPORT SHEET -->
+<div class="bottom-sheet" id="export-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">📊 엑셀 내보내기</div>
+    <button class="sheet-close" onclick="hideSheet('export-sheet')">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div class="form-section">
+      <label class="form-label">기간</label>
+      <select class="form-select" id="export-period" onchange="onExportPeriodChange()">
+        <option value="month">월별</option>
+        <option value="year">연별</option>
+        <option value="all">전체</option>
+      </select>
+    </div>
+    <div id="export-year-wrap" class="form-section">
+      <label class="form-label">연도</label>
+      <select class="form-select" id="export-year"></select>
+    </div>
+    <div id="export-month-wrap" class="form-section">
+      <label class="form-label">월</label>
+      <select class="form-select" id="export-month">
+        <option value="0">1월</option><option value="1">2월</option>
+        <option value="2">3월</option><option value="3">4월</option>
+        <option value="4">5월</option><option value="5">6월</option>
+        <option value="6">7월</option><option value="7">8월</option>
+        <option value="8">9월</option><option value="9">10월</option>
+        <option value="10">11월</option><option value="11">12월</option>
+      </select>
+    </div>
+    <div class="form-section">
+      <label class="form-label">배우 필터</label>
+      <select class="form-select" id="export-actor">
+        <option value="all">전체 배우</option>
+        <option value="LMH">LMH</option><option value="LSJ">LSJ</option>
+        <option value="KM">KM</option><option value="KMJ">KMJ</option>
+        <option value="LSH">LSH</option><option value="PJS">PJS</option>
+      </select>
+    </div>
+    <div class="form-section">
+      <label class="form-label">스텝 이름 필터 <span style="font-size:11px;color:var(--text3);font-weight:400;">(입력 시 해당 스텝 포함 일정만)</span></label>
+      <input type="text" class="form-input" id="export-staff-name" placeholder="예: 김헤어 (비우면 전체)">
+    </div>
+    <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.7;">
+      📄 <b>전체일정</b> — 일정별 동행 스텝 + 총 근무시간<br>
+      👥 <b>스텝근무내역</b> — 스텝 1인 1행, 근무시간 기록<br>
+      📊 <b>스텝별요약</b> — 이름별 총 참여 횟수 + 총 시간
+    </div>
+    <button class="btn-submit" onclick="generateExcel()">📥 엑셀 다운로드</button>
+    <div id="export-status" style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px;min-height:18px;"></div>
   </div>
 </div>
 
@@ -1639,6 +1694,161 @@ function showToast(msg) {
   t.textContent=msg; t.classList.add('show');
   if(toastTimer) clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.remove('show'),2000);
+}
+
+// ═══════════════════════════════════════════════════
+//  EXCEL EXPORT
+// ═══════════════════════════════════════════════════
+function openExportSheet() {
+  // 연도 목록 자동 생성
+  const years = [...new Set(state.events.map(e => new Date(e.date).getFullYear()))];
+  const curYear = new Date().getFullYear();
+  if (!years.includes(curYear)) years.push(curYear);
+  years.sort((a,b) => b - a);
+
+  const yearSel = document.getElementById('export-year');
+  yearSel.innerHTML = years.map(y =>
+    `<option value="${y}" ${y===state.year?'selected':''}>${y}년</option>`
+  ).join('');
+  document.getElementById('export-month').value = state.month;
+  document.getElementById('export-actor').value =
+    (state.selectedActor !== 'all' && ACTOR_LIST.includes(state.selectedActor)) ? state.selectedActor : 'all';
+  document.getElementById('export-period').value = 'month';
+  document.getElementById('export-month-wrap').style.display = '';
+  document.getElementById('export-year-wrap').style.display = '';
+  document.getElementById('export-staff-name').value = '';
+  document.getElementById('export-status').textContent = '';
+  hideSheet('user-menu-sheet');
+  showSheet('export-sheet');
+}
+
+function onExportPeriodChange() {
+  const p = document.getElementById('export-period').value;
+  document.getElementById('export-month-wrap').style.display = p === 'month' ? '' : 'none';
+  document.getElementById('export-year-wrap').style.display  = p === 'all'   ? 'none' : '';
+}
+
+function generateExcel() {
+  if (typeof XLSX === 'undefined') {
+    showToast('❌ 라이브러리 로딩 중... 잠시 후 다시 시도해주세요');
+    return;
+  }
+  const statusEl = document.getElementById('export-status');
+  statusEl.textContent = '⏳ 생성 중...';
+
+  const period      = document.getElementById('export-period').value;
+  const year        = parseInt(document.getElementById('export-year')?.value || new Date().getFullYear());
+  const month       = parseInt(document.getElementById('export-month').value);
+  const actorFilter = document.getElementById('export-actor').value;
+  const staffFilter = document.getElementById('export-staff-name').value.trim().toLowerCase();
+  const DOW = ['일','월','화','수','목','금','토'];
+
+  // ── 이벤트 필터링 ──
+  let evts = state.events.filter(ev => {
+    const d = new Date(ev.date);
+    if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
+    if (period === 'year'  &&  d.getFullYear() !== year)                             return false;
+    if (actorFilter !== 'all' && ev.actor !== actorFilter)                           return false;
+    if (staffFilter) {
+      if (!ev.staff) return false;
+      try {
+        const obj = JSON.parse(ev.staff);
+        return STAFF_CATS.some(c => (obj[c]||[]).some(item => {
+          const nm = typeof item === 'string' ? item : (item.name||'');
+          return nm.toLowerCase().includes(staffFilter);
+        }));
+      } catch(e) { return false; }
+    }
+    return true;
+  }).sort((a,b) => a.date !== b.date ? a.date.localeCompare(b.date) : (a.startTime||'').localeCompare(b.startTime||''));
+
+  const wb = XLSX.utils.book_new();
+
+  // ══ Sheet 1: 전체 일정 ══════════════════════════
+  const rows1 = [['날짜','요일','배우','유형','제목','시작','종료','장소','동행/스텝','스텝 총 근무시간(h)','메모']];
+  evts.forEach(ev => {
+    const d = new Date(ev.date);
+    let staffStr = '', totalHours = 0;
+    if (ev.staff) {
+      try {
+        const obj = JSON.parse(ev.staff); const parts = [];
+        STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
+          const nm = typeof item === 'string' ? item : (item.name||'');
+          const hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
+          if (!nm) return;
+          parts.push(hr ? `${nm}(${hr}h)` : nm);
+          totalHours += hr;
+        }));
+        staffStr = parts.join(', ');
+      } catch(e) {}
+    }
+    rows1.push([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+      ev.startTime||'', ev.endTime||'', ev.location||'',
+      staffStr, totalHours||'', ev.memo||'']);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  ws1['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:45},{wch:18},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws1, '전체일정');
+
+  // ══ Sheet 2: 스텝 근무 내역 (1인 1행) ══════════
+  const rows2 = [['날짜','요일','배우','유형','제목','시작','종료','장소','카테고리','스텝 이름','근무시간(h)']];
+  evts.forEach(ev => {
+    const d = new Date(ev.date);
+    if (!ev.staff) return;
+    try {
+      const obj = JSON.parse(ev.staff);
+      STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
+        const nm = typeof item === 'string' ? item : (item.name||'');
+        const hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
+        if (!nm) return;
+        if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
+        rows2.push([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+          ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, hr]);
+      }));
+    } catch(e) {}
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  ws2['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:15},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws2, '스텝근무내역');
+
+  // ══ Sheet 3: 스텝별 요약 (이름별 총 시간) ═══════
+  const summary = {};
+  evts.forEach(ev => {
+    if (!ev.staff) return;
+    try {
+      const obj = JSON.parse(ev.staff);
+      STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
+        const nm = typeof item === 'string' ? item : (item.name||'');
+        const hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
+        if (!nm) return;
+        if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
+        const key = nm + '|' + c;
+        if (!summary[key]) summary[key] = {name:nm, cat:c, hours:0, cnt:0};
+        summary[key].hours += hr;
+        summary[key].cnt++;
+      }));
+    } catch(e) {}
+  });
+  const rows3 = [['스텝 이름','카테고리','참여 일정 수','총 근무시간(h)']];
+  Object.values(summary)
+    .sort((a,b) => (b.hours - a.hours) || a.name.localeCompare(b.name))
+    .forEach(s => rows3.push([s.name, s.cat, s.cnt, s.hours||'']));
+  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
+  ws3['!cols'] = [{wch:15},{wch:15},{wch:15},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws3, '스텝별요약');
+
+  // 파일명
+  let fname = 'MYM스케줄';
+  if (actorFilter !== 'all') fname += '_' + actorFilter;
+  if (period === 'month')      fname += '_' + year + '년' + (month+1) + '월';
+  else if (period === 'year')  fname += '_' + year + '년';
+  else                         fname += '_전체';
+  if (staffFilter) fname += '_' + staffFilter;
+  fname += '.xlsx';
+
+  XLSX.writeFile(wb, fname);
+  statusEl.textContent = '✅ ' + fname + ' 다운로드됨';
+  showToast('✅ 엑셀 다운로드 완료');
 }
 
 // ═══════════════════════════════════════════════════
