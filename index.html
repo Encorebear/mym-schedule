@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MYM 스케줄 통합</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2535;
+    --bg4: #252d3d;
+    --border: #2a3347;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --accent: #3b82f6;
+    --danger: #ef4444;
+    --success: #22c55e;
+
+    --minho: #60a5fa;
+    --sujeong: #f472b6;
+    --min: #a78bfa;
+    --minji: #fbbf24;
+    --seohyun: #34d399;
+    --junseo: #f87171;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding-bottom: 80px;
+  }
+
+  /* ── HEADER ── */
+  .app-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(15,17,23,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px 10px;
+  }
+
+  .header-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .app-title {
+    font-size: 16px; font-weight: 700; letter-spacing: -0.3px;
+    color: var(--text);
+  }
+
+  .app-title span { color: var(--accent); }
+
+  .header-actions { display: flex; gap: 8px; }
+
+  .btn-icon {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px;
+    color: var(--text2); font-size: 13px;
+    cursor: pointer; display: flex; align-items: center; gap: 4px;
+    transition: all 0.15s;
+  }
+  .btn-icon:active { opacity: 0.7; transform: scale(0.96); }
+
+  /* ── MONTH NAV ── */
+  .month-nav {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 0 0 2px;
+  }
+  .month-label {
+    font-size: 17px; font-weight: 700; min-width: 100px; text-align: center;
+    letter-spacing: -0.3px;
+  }
+  .nav-btn {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 14px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nav-btn:active { background: var(--bg4); transform: scale(0.92); }
+
+  /* ── ACTOR FILTER ── */
+  .actor-filter {
+    padding: 8px 12px 0;
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  }
+  .actor-filter::-webkit-scrollbar { display: none; }
+
+  .actor-chip {
+    flex-shrink: 0;
+    padding: 5px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    border: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .actor-chip.active {
+    color: #fff;
+    border-color: transparent;
+  }
+  .actor-chip:not(.active) {
+    background: var(--bg3);
+    border-color: var(--border);
+    color: var(--text2);
+  }
+
+  /* ── WEEKDAY HEADER ── */
+  .weekday-header {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    padding: 8px 4px 4px;
+    gap: 2px;
+  }
+  .weekday-label {
+    text-align: center; font-size: 11px; font-weight: 600;
+    color: var(--text3); padding: 2px 0;
+  }
+  .weekday-label:nth-child(7) { color: var(--minho); }  /* Sun red */
+
+  /* ── CALENDAR GRID ── */
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px; padding: 0 4px 8px;
+  }
+
+  .cal-day {
+    background: var(--bg2); border-radius: 8px;
+    min-height: 72px; padding: 4px;
+    cursor: pointer; transition: background 0.15s;
+    border: 1px solid transparent;
+    position: relative;
+  }
+  .cal-day:active { background: var(--bg3); }
+  .cal-day.other-month { opacity: 0.3; }
+  .cal-day.today { border-color: var(--accent); }
+  .cal-day.selected { background: var(--bg4); border-color: var(--accent); }
+
+  .day-num {
+    font-size: 12px; font-weight: 600; color: var(--text2);
+    line-height: 1; margin-bottom: 3px; display: block;
+  }
+  .cal-day.today .day-num { color: var(--accent); }
+  .cal-day:nth-child(7n) .day-num { color: #f87171; }  /* Sun */
+
+  .event-dots { display: flex; flex-direction: column; gap: 2px; }
+
+  .event-dot {
+    height: 14px; border-radius: 3px;
+    font-size: 9px; font-weight: 600;
+    padding: 0 3px; line-height: 14px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; color: rgba(0,0,0,0.85);
+  }
+
+  .more-count {
+    font-size: 9px; color: var(--text3);
+    padding: 0 2px; font-weight: 500;
+  }
+
+  /* ── FAB ── */
+  .fab {
+    position: fixed; bottom: 88px; right: 16px; z-index: 200;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: var(--accent);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; color: white;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.5);
+    transition: all 0.2s;
+  }
+  .fab:active { transform: scale(0.92); box-shadow: 0 2px 10px rgba(59,130,246,0.4); }
+
+  /* ── BOTTOM SHEET ── */
+  .sheet-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .sheet-overlay.visible { opacity: 1; pointer-events: all; }
+
+  .bottom-sheet {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
+    background: var(--bg2);
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--border);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
+    max-height: 92vh;
+    display: flex; flex-direction: column;
+  }
+  .bottom-sheet.visible { transform: translateY(0); }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+
+  .sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .sheet-title {
+    font-size: 16px; font-weight: 700;
+  }
+
+  .sheet-close {
+    background: var(--bg3); border: none; border-radius: 50%;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 14px; cursor: pointer;
+  }
+  .sheet-close:active { opacity: 0.7; }
+
+  .sheet-body {
+    overflow-y: auto; flex: 1;
+    padding: 12px 16px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── DAY EVENTS LIST ── */
+  .day-sheet-date {
+    font-size: 13px; color: var(--text2); margin-bottom: 12px;
+  }
+
+  .event-card {
+    background: var(--bg3); border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 12px; margin-bottom: 8px;
+    position: relative; overflow: hidden;
+  }
+  .event-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+  }
+
+  .event-card-actor {
+    font-size: 11px; font-weight: 700;
+    margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+  }
+  .event-card-title {
+    font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+  }
+  .event-card-meta {
+    font-size: 12px; color: var(--text2);
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .meta-item { display: flex; align-items: center; gap: 3px; }
+
+  .event-card-actions {
+    display: flex; gap: 6px; margin-top: 8px;
+  }
+  .btn-edit, .btn-delete {
+    flex: 1; padding: 6px; border-radius: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .btn-edit { background: var(--bg4); color: var(--text2); }
+  .btn-delete { background: rgba(239,68,68,0.1); color: var(--danger); border-color: rgba(239,68,68,0.3); }
+  .btn-edit:active, .btn-delete:active { opacity: 0.7; }
+
+  .no-events {
+    text-align: center; color: var(--text3);
+    padding: 32px 0; font-size: 13px;
+  }
+
+  /* ── ADD/EDIT FORM ── */
+  .form-section { margin-bottom: 16px; }
+  .form-label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--text2); margin-bottom: 6px;
+  }
+
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-size: 14px; padding: 10px 12px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .form-select option { background: var(--bg2); }
+
+  .form-textarea { resize: none; height: 72px; line-height: 1.5; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .actor-select-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+  }
+  .actor-select-btn {
+    padding: 8px 4px; border-radius: 8px; border: 2px solid var(--border);
+    background: var(--bg3); color: var(--text2);
+    font-size: 12px; font-weight: 600; cursor: pointer; text-align: center;
+    transition: all 0.15s;
+  }
+  .actor-select-btn.selected {
+    color: #fff; border-color: transparent;
+  }
+  .actor-select-btn:active { transform: scale(0.96); }
+
+  .type-select-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  }
+  .type-select-btn {
+    padding: 7px 4px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2);
+    font-size: 11px; cursor: pointer; text-align: center;
+    transition: all 0.15s; line-height: 1.3;
+  }
+  .type-select-btn.selected {
+    background: rgba(59,130,246,0.2); border-color: var(--accent); color: var(--accent);
+  }
+  .type-select-btn:active { transform: scale(0.95); }
+
+  .btn-submit {
+    width: 100%; padding: 14px;
+    background: var(--accent); border: none; border-radius: 10px;
+    color: white; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+    margin-top: 4px;
+  }
+  .btn-submit:active { opacity: 0.85; transform: scale(0.98); }
+
+  /* ── SETTINGS SHEET ── */
+  .settings-section { margin-bottom: 20px; }
+  .settings-section-title {
+    font-size: 11px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 8px;
+  }
+
+  .settings-input {
+    width: 100%; background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px;
+    padding: 10px 12px; font-family: inherit;
+  }
+  .settings-input:focus { outline: none; border-color: var(--accent); }
+
+  .btn-save-settings {
+    width: 100%; padding: 12px;
+    background: var(--success); border: none; border-radius: 8px;
+    color: white; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .sync-status {
+    font-size: 12px; color: var(--text3); margin-top: 6px; text-align: center;
+  }
+  .sync-status.ok { color: var(--success); }
+  .sync-status.err { color: var(--danger); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--bg4); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; font-weight: 500;
+    padding: 8px 16px; border-radius: 20px;
+    z-index: 999; opacity: 0; pointer-events: none;
+    transition: all 0.25s; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── LIST VIEW ── */
+  .list-view { padding: 8px 12px; }
+  .list-date-group { margin-bottom: 16px; }
+  .list-date-label {
+    font-size: 12px; font-weight: 700; color: var(--text3);
+    margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .list-event-card {
+    background: var(--bg2); border-radius: 10px; border: 1px solid var(--border);
+    padding: 10px 12px; margin-bottom: 6px;
+    display: flex; align-items: flex-start; gap: 10px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .list-event-card:active { background: var(--bg3); }
+  .list-event-bar { width: 3px; border-radius: 2px; min-height: 36px; flex-shrink: 0; align-self: stretch; }
+  .list-event-content { flex: 1; min-width: 0; }
+  .list-event-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .list-event-meta { font-size: 11px; color: var(--text3); }
+
+  .view-toggle {
+    display: flex; gap: 4px;
+  }
+  .view-btn {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 9px;
+    color: var(--text2); font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .view-btn.active {
+    background: var(--accent); border-color: var(--accent); color: white;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-calendar {
+    grid-column: 1 / -1;
+    padding: 20px; text-align: center; color: var(--text3); font-size: 12px;
+  }
+
+  .swipe-indicator {
+    text-align: center; padding: 4px 0 8px;
+    font-size: 11px; color: var(--text3);
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="app-header">
+  <div class="header-top">
+    <div class="app-title">MYM <span>스케줄</span></div>
+    <div class="header-actions">
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-cal-view" onclick="setView('calendar')">📅</button>
+        <button class="view-btn" id="btn-list-view" onclick="setView('list')">📋</button>
+      </div>
+      <button class="btn-icon" onclick="openSettings()">⚙️</button>
+    </div>
+  </div>
+
+  <div class="month-nav">
+    <button class="nav-btn" onclick="changeMonth(-1)">‹</button>
+    <div class="month-label" id="month-label">2026년 4월</div>
+    <button class="nav-btn" onclick="changeMonth(1)">›</button>
+  </div>
+</div>
+
+<!-- ACTOR FILTER -->
+<div class="actor-filter" id="actor-filter">
+  <div class="actor-chip active" data-actor="all" onclick="toggleActor('all')" style="background:var(--bg3);border-color:var(--accent);color:var(--accent);">전체</div>
+  <div class="actor-chip" data-actor="이민호" onclick="toggleActor('이민호')" style="background:rgba(96,165,250,0.15);color:var(--minho);">이민호</div>
+  <div class="actor-chip" data-actor="임수정" onclick="toggleActor('임수정')" style="background:rgba(244,114,182,0.15);color:var(--sujeong);">임수정</div>
+  <div class="actor-chip" data-actor="김민" onclick="toggleActor('김민')" style="background:rgba(167,139,250,0.15);color:var(--min);">김민</div>
+  <div class="actor-chip" data-actor="강민지" onclick="toggleActor('강민지')" style="background:rgba(251,191,36,0.15);color:var(--minji);">강민지</div>
+  <div class="actor-chip" data-actor="이서현" onclick="toggleActor('이서현')" style="background:rgba(52,211,153,0.15);color:var(--seohyun);">이서현</div>
+  <div class="actor-chip" data-actor="박준서" onclick="toggleActor('박준서')" style="background:rgba(248,113,113,0.15);color:var(--junseo);">박준서</div>
+</div>
+
+<!-- WEEKDAY LABELS -->
+<div class="weekday-header">
+  <div class="weekday-label">월</div>
+  <div class="weekday-label">화</div>
+  <div class="weekday-label">수</div>
+  <div class="weekday-label">목</div>
+  <div class="weekday-label">금</div>
+  <div class="weekday-label">토</div>
+  <div class="weekday-label" style="color:var(--junseo);">일</div>
+</div>
+
+<!-- CALENDAR / LIST VIEW -->
+<div id="calendar-view">
+  <div class="calendar-grid" id="calendar-grid"></div>
+</div>
+<div id="list-view" style="display:none;">
+  <div class="list-view" id="list-container"></div>
+</div>
+
+<!-- FAB -->
+<button class="fab" onclick="openAddSheet()">+</button>
+
+<!-- OVERLAY -->
+<div class="sheet-overlay" id="overlay" onclick="closeAllSheets()"></div>
+
+<!-- DAY DETAIL SHEET -->
+<div class="bottom-sheet" id="day-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title" id="day-sheet-title">일정</div>
+    <button class="sheet-close" onclick="closeDaySheet()">✕</button>
+  </div>
+  <div class="sheet-body" id="day-sheet-body"></div>
+</div>
+
+<!-- ADD/EDIT SHEET -->
+<div class="bottom-sheet" id="form-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title" id="form-sheet-title">일정 추가</div>
+    <button class="sheet-close" onclick="closeFormSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <form id="event-form" onsubmit="submitEventForm(event)">
+      <input type="hidden" id="form-event-id">
+
+      <div class="form-section">
+        <label class="form-label">배우</label>
+        <div class="actor-select-grid" id="actor-select-grid">
+          <button type="button" class="actor-select-btn" data-actor="이민호" onclick="selectFormActor('이민호')" style="--ac:var(--minho)">이민호</button>
+          <button type="button" class="actor-select-btn" data-actor="임수정" onclick="selectFormActor('임수정')" style="--ac:var(--sujeong)">임수정</button>
+          <button type="button" class="actor-select-btn" data-actor="김민" onclick="selectFormActor('김민')" style="--ac:var(--min)">김민</button>
+          <button type="button" class="actor-select-btn" data-actor="강민지" onclick="selectFormActor('강민지')" style="--ac:var(--minji)">강민지</button>
+          <button type="button" class="actor-select-btn" data-actor="이서현" onclick="selectFormActor('이서현')" style="--ac:var(--seohyun)">이서현</button>
+          <button type="button" class="actor-select-btn" data-actor="박준서" onclick="selectFormActor('박준서')" style="--ac:var(--junseo)">박준서</button>
+        </div>
+        <input type="hidden" id="form-actor" required>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">날짜</label>
+        <input type="date" class="form-input" id="form-date" required>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">일정 유형</label>
+        <div class="type-select-grid" id="type-select-grid">
+          <button type="button" class="type-select-btn" data-type="촬영" onclick="selectFormType('촬영')">🎬<br>촬영</button>
+          <button type="button" class="type-select-btn" data-type="미팅" onclick="selectFormType('미팅')">📋<br>미팅</button>
+          <button type="button" class="type-select-btn" data-type="행사" onclick="selectFormType('행사')">🎪<br>행사</button>
+          <button type="button" class="type-select-btn" data-type="인터뷰" onclick="selectFormType('인터뷰')">🎤<br>인터뷰</button>
+          <button type="button" class="type-select-btn" data-type="이동" onclick="selectFormType('이동')">✈️<br>이동</button>
+          <button type="button" class="type-select-btn" data-type="홍보" onclick="selectFormType('홍보')">📸<br>홍보</button>
+          <button type="button" class="type-select-btn" data-type="휴식" onclick="selectFormType('휴식')">😴<br>휴식</button>
+          <button type="button" class="type-select-btn" data-type="기타" onclick="selectFormType('기타')">📌<br>기타</button>
+        </div>
+        <input type="hidden" id="form-type" required>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">제목</label>
+        <input type="text" class="form-input" id="form-title" placeholder="일정 제목 입력" required>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">시간</label>
+        <div class="form-row">
+          <div>
+            <label class="form-label" style="font-size:11px;margin-bottom:4px;">시작</label>
+            <input type="time" class="form-input" id="form-start-time">
+          </div>
+          <div>
+            <label class="form-label" style="font-size:11px;margin-bottom:4px;">종료</label>
+            <input type="time" class="form-input" id="form-end-time">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">장소</label>
+        <input type="text" class="form-input" id="form-location" placeholder="장소 입력 (선택)">
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">메모</label>
+        <textarea class="form-textarea" id="form-memo" placeholder="메모 입력 (선택)"></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit" id="form-submit-btn">일정 추가</button>
+    </form>
+  </div>
+</div>
+
+<!-- SETTINGS SHEET -->
+<div class="bottom-sheet" id="settings-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">설정</div>
+    <button class="sheet-close" onclick="closeSettingsSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <div class="settings-section">
+      <div class="settings-section-title">🔗 Google Apps Script 연동</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5;">
+        여러 기기 동기화를 위해 Apps Script 웹앱 URL을 입력하세요.<br>
+        비워두면 이 기기에만 저장됩니다.
+      </p>
+      <input type="url" class="settings-input" id="settings-api-url"
+        placeholder="https://script.google.com/macros/s/.../exec">
+      <div class="sync-status" id="sync-status">미연결</div>
+    </div>
+    <div class="settings-section">
+      <button class="btn-save-settings" onclick="saveSettings()">💾 설정 저장</button>
+    </div>
+    <div class="settings-section" style="margin-top:8px;">
+      <div class="settings-section-title">📤 데이터</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn-icon" style="justify-content:center;padding:10px 0;" onclick="exportData()">📤 내보내기</button>
+        <button class="btn-icon" style="justify-content:center;padding:10px 0;" onclick="triggerImport()">📥 가져오기</button>
+      </div>
+      <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+    <div class="settings-section" style="margin-top:4px;">
+      <div style="font-size:11px;color:var(--text3);text-align:center;">
+        MYM 스케줄 통합 v1.0 · 저장소: localStorage
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  DATA & STATE
+// ═══════════════════════════════════════════════
+
+const ACTORS = {
+  '이민호': { color: '#60a5fa', bg: 'rgba(96,165,250,0.85)' },
+  '임수정': { color: '#f472b6', bg: 'rgba(244,114,182,0.85)' },
+  '김민':   { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)' },
+  '강민지': { color: '#fbbf24', bg: 'rgba(251,191,36,0.85)' },
+  '이서현': { color: '#34d399', bg: 'rgba(52,211,153,0.85)' },
+  '박준서': { color: '#f87171', bg: 'rgba(248,113,113,0.85)' }
+};
+
+const EVENT_TYPES = {
+  '촬영': '🎬', '미팅': '📋', '행사': '🎪', '인터뷰': '🎤',
+  '이동': '✈️', '홍보': '📸', '휴식': '😴', '기타': '📌'
+};
+
+const STORAGE_KEY = 'mym_schedule_v1';
+const SETTINGS_KEY = 'mym_settings_v1';
+
+let state = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth(), // 0-based
+  selectedActor: 'all',
+  view: 'calendar',
+  events: [],
+  apiUrl: ''
+};
+
+// ═══════════════════════════════════════════════
+//  STORAGE
+// ═══════════════════════════════════════════════
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state.events = JSON.parse(raw);
+  } catch(e) { state.events = []; }
+
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    state.apiUrl = s.apiUrl || '';
+  } catch(e) {}
+}
+
+function saveToStorage() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+}
+
+function saveSettings() {
+  const url = document.getElementById('settings-api-url').value.trim();
+  state.apiUrl = url;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ apiUrl: url }));
+  showToast('설정 저장됨');
+  if (url) syncFromServer();
+  closeSettingsSheet();
+}
+
+// ═══════════════════════════════════════════════
+//  SERVER SYNC (Google Apps Script)
+// ═══════════════════════════════════════════════
+
+async function syncFromServer() {
+  if (!state.apiUrl) return;
+  try {
+    const res = await fetch(state.apiUrl + '?action=load');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (Array.isArray(data.events)) {
+      state.events = data.events;
+      saveToStorage();
+      renderCurrentView();
+      document.getElementById('sync-status').textContent = '✅ 동기화됨 ' + new Date().toLocaleTimeString('ko');
+      document.getElementById('sync-status').className = 'sync-status ok';
+    }
+  } catch(e) {
+    document.getElementById('sync-status').textContent = '❌ 연결 실패: ' + e.message;
+    document.getElementById('sync-status').className = 'sync-status err';
+  }
+}
+
+async function pushToServer(action, event) {
+  if (!state.apiUrl) return;
+  try {
+    await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, event })
+    });
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
+//  CALENDAR RENDERING
+// ═══════════════════════════════════════════════
+
+function getMonthDays(year, month) {
+  const days = [];
+  const first = new Date(year, month, 1);
+  // Monday start: Mon=0 ... Sun=6
+  let startDow = first.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  startDow = startDow === 0 ? 6 : startDow - 1; // convert to Mon=0
+  // Fill prefix from prev month
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = new Date(year, month, -i);
+    days.push({ date: d, current: false });
+  }
+  // Current month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push({ date: new Date(year, month, d), current: true });
+  }
+  // Fill suffix to complete grid (multiple of 7)
+  let i = 1;
+  while (days.length % 7 !== 0) {
+    days.push({ date: new Date(year, month + 1, i++), current: false });
+  }
+  return days;
+}
+
+function dateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getFilteredEvents(actor) {
+  if (actor === 'all') return state.events;
+  return state.events.filter(e => e.actor === actor);
+}
+
+function getEventsForDate(dateStr, actor) {
+  return getFilteredEvents(actor).filter(e => e.date === dateStr);
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calendar-grid');
+  const days = getMonthDays(state.year, state.month);
+  const today = dateKey(new Date());
+
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('month-label').textContent = `${state.year}년 ${monthNames[state.month]}`;
+
+  let html = '';
+  days.forEach(({ date, current }) => {
+    const key = dateKey(date);
+    const events = getEventsForDate(key, state.selectedActor);
+    const isToday = key === today;
+    const dow = date.getDay(); // 0=Sun
+
+    let cls = 'cal-day';
+    if (!current) cls += ' other-month';
+    if (isToday) cls += ' today';
+
+    let dotsHtml = '';
+    const maxShow = 3;
+    events.slice(0, maxShow).forEach(ev => {
+      const ac = ACTORS[ev.actor] || {};
+      const typeEmoji = EVENT_TYPES[ev.type] || '';
+      dotsHtml += `<div class="event-dot" style="background:${ac.bg || '#3b82f6'}">${typeEmoji} ${ev.title}</div>`;
+    });
+    if (events.length > maxShow) {
+      dotsHtml += `<div class="more-count">+${events.length - maxShow}개 더</div>`;
+    }
+
+    const dayNumStyle = dow === 0 ? 'color:#f87171' : (dow === 6 ? 'color:#a78bfa' : '');
+
+    html += `<div class="${cls}" onclick="openDaySheet('${key}')">
+      <span class="day-num" style="${dayNumStyle}">${date.getDate()}</span>
+      <div class="event-dots">${dotsHtml}</div>
+    </div>`;
+  });
+
+  grid.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════
+//  LIST VIEW
+// ═══════════════════════════════════════════════
+
+function renderList() {
+  const container = document.getElementById('list-container');
+  const events = getFilteredEvents(state.selectedActor)
+    .filter(e => {
+      const d = new Date(e.date);
+      return d.getFullYear() === state.year && d.getMonth() === state.month;
+    })
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    });
+
+  if (events.length === 0) {
+    container.innerHTML = '<div class="no-events" style="padding:40px 0;">이번 달 일정이 없습니다</div>';
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  events.forEach(e => {
+    if (!groups[e.date]) groups[e.date] = [];
+    groups[e.date].push(e);
+  });
+
+  const DOW = ['일','월','화','수','목','금','토'];
+  let html = '';
+  Object.keys(groups).sort().forEach(dateStr => {
+    const d = new Date(dateStr);
+    const dow = DOW[d.getDay()];
+    const label = `${d.getMonth()+1}월 ${d.getDate()}일 (${dow})`;
+    html += `<div class="list-date-group"><div class="list-date-label">${label}</div>`;
+    groups[dateStr].forEach(ev => {
+      const ac = ACTORS[ev.actor] || {};
+      const timeStr = ev.startTime ? (ev.endTime ? `${ev.startTime}~${ev.endTime}` : ev.startTime) : '';
+      const typeEmoji = EVENT_TYPES[ev.type] || '';
+      html += `<div class="list-event-card" onclick="openDaySheet('${ev.date}')">
+        <div class="list-event-bar" style="background:${ac.color || '#3b82f6'}"></div>
+        <div class="list-event-content">
+          <div class="list-event-title">${typeEmoji} ${ev.title}</div>
+          <div class="list-event-meta">${ev.actor}${timeStr ? ' · ' + timeStr : ''}${ev.location ? ' · 📍' + ev.location : ''}</div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderCurrentView() {
+  if (state.view === 'calendar') renderCalendar();
+  else renderList();
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+
+function changeMonth(delta) {
+  state.month += delta;
+  if (state.month > 11) { state.month = 0; state.year++; }
+  if (state.month < 0)  { state.month = 11; state.year--; }
+  renderCurrentView();
+}
+
+function setView(v) {
+  state.view = v;
+  document.getElementById('calendar-view').style.display = v === 'calendar' ? '' : 'none';
+  document.getElementById('list-view').style.display = v === 'list' ? '' : 'none';
+  document.getElementById('btn-cal-view').classList.toggle('active', v === 'calendar');
+  document.getElementById('btn-list-view').classList.toggle('active', v === 'list');
+  renderCurrentView();
+}
+
+// ═══════════════════════════════════════════════
+//  ACTOR FILTER
+// ═══════════════════════════════════════════════
+
+function toggleActor(actor) {
+  state.selectedActor = actor;
+  document.querySelectorAll('.actor-chip').forEach(chip => {
+    const a = chip.dataset.actor;
+    if (a === actor) {
+      if (a === 'all') {
+        chip.style.background = 'var(--bg3)';
+        chip.style.borderColor = 'var(--accent)';
+        chip.style.color = 'var(--accent)';
+      } else {
+        const ac = ACTORS[a];
+        chip.style.background = ac ? ac.bg.replace('0.85', '0.2') : 'var(--bg3)';
+        chip.style.borderColor = ac ? ac.color : 'var(--accent)';
+        chip.style.color = ac ? ac.color : 'var(--accent)';
+        chip.style.borderWidth = '2px';
+      }
+    } else {
+      chip.style.background = a === 'all' ? 'var(--bg3)' : `${ACTORS[a]?.bg?.replace('0.85','0.1') || 'var(--bg3)'}`;
+      chip.style.borderColor = 'var(--border)';
+      chip.style.color = a === 'all' ? 'var(--text2)' : (ACTORS[a]?.color || 'var(--text2)');
+      chip.style.borderWidth = '';
+    }
+  });
+  renderCurrentView();
+}
+
+// ═══════════════════════════════════════════════
+//  DAY DETAIL SHEET
+// ═══════════════════════════════════════════════
+
+let currentDayKey = null;
+
+function openDaySheet(dateStr) {
+  currentDayKey = dateStr;
+  const d = new Date(dateStr);
+  const DOW = ['일','월','화','수','목','금','토'];
+  document.getElementById('day-sheet-title').textContent =
+    `${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
+
+  renderDayBody(dateStr);
+  showSheet('day-sheet');
+}
+
+function renderDayBody(dateStr) {
+  const body = document.getElementById('day-sheet-body');
+  const events = getEventsForDate(dateStr, state.selectedActor)
+    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
+  if (events.length === 0) {
+    body.innerHTML = `<div class="no-events">등록된 일정이 없습니다<br><br>
+      <button class="btn-submit" style="max-width:200px;margin:0 auto;display:block;font-size:13px;padding:10px;"
+        onclick="closeDaySheet();openAddSheet('${dateStr}')">+ 일정 추가</button></div>`;
+    return;
+  }
+
+  let html = '';
+  events.forEach(ev => {
+    const ac = ACTORS[ev.actor] || {};
+    const typeEmoji = EVENT_TYPES[ev.type] || '';
+    const timeStr = ev.startTime ? (ev.endTime ? `${ev.startTime} ~ ${ev.endTime}` : ev.startTime) : '';
+    html += `
+    <div class="event-card" style="border-left:3px solid ${ac.color || '#3b82f6'}">
+      <div class="event-card-actor" style="color:${ac.color || '#3b82f6'}">
+        <span style="width:8px;height:8px;border-radius:50%;background:${ac.color || '#3b82f6'};display:inline-block;"></span>
+        ${ev.actor}
+      </div>
+      <div class="event-card-title">${typeEmoji} ${ev.title}</div>
+      <div class="event-card-meta">
+        ${timeStr ? `<span class="meta-item">🕐 ${timeStr}</span>` : ''}
+        ${ev.location ? `<span class="meta-item">📍 ${ev.location}</span>` : ''}
+        ${ev.type ? `<span class="meta-item">${typeEmoji} ${ev.type}</span>` : ''}
+      </div>
+      ${ev.memo ? `<div style="margin-top:6px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>` : ''}
+      <div class="event-card-actions">
+        <button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>
+        <button class="btn-delete" onclick="deleteEvent('${ev.id}','${dateStr}')">🗑 삭제</button>
+      </div>
+    </div>`;
+  });
+
+  html += `<button class="btn-submit" style="font-size:13px;padding:10px;margin-top:8px;"
+    onclick="closeDaySheet();openAddSheet('${dateStr}')">+ 이 날에 일정 추가</button>`;
+
+  body.innerHTML = html;
+}
+
+function deleteEvent(id, dateStr) {
+  if (!confirm('이 일정을 삭제하시겠습니까?')) return;
+  state.events = state.events.filter(e => e.id !== id);
+  saveToStorage();
+  pushToServer('delete', { id });
+  renderCurrentView();
+  renderDayBody(dateStr);
+  showToast('삭제되었습니다');
+}
+
+// ═══════════════════════════════════════════════
+//  ADD / EDIT FORM
+// ═══════════════════════════════════════════════
+
+let editingEventId = null;
+
+function openAddSheet(dateStr) {
+  editingEventId = null;
+  document.getElementById('form-event-id').value = '';
+  document.getElementById('form-sheet-title').textContent = '일정 추가';
+  document.getElementById('form-submit-btn').textContent = '일정 추가';
+  document.getElementById('event-form').reset();
+
+  // Reset selections
+  document.querySelectorAll('.actor-select-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.type-select-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('form-actor').value = '';
+  document.getElementById('form-type').value = '';
+
+  // Pre-select current actor filter
+  if (state.selectedActor !== 'all') {
+    selectFormActor(state.selectedActor);
+  }
+
+  // Pre-fill date
+  if (dateStr) {
+    document.getElementById('form-date').value = dateStr;
+  } else {
+    document.getElementById('form-date').value = dateKey(new Date());
+  }
+
+  showSheet('form-sheet');
+}
+
+function openEditSheet(id) {
+  const ev = state.events.find(e => e.id === id);
+  if (!ev) return;
+
+  editingEventId = id;
+  document.getElementById('form-event-id').value = id;
+  document.getElementById('form-sheet-title').textContent = '일정 수정';
+  document.getElementById('form-submit-btn').textContent = '수정 완료';
+
+  // Reset
+  document.querySelectorAll('.actor-select-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.type-select-btn').forEach(b => b.classList.remove('selected'));
+
+  selectFormActor(ev.actor);
+  document.getElementById('form-date').value = ev.date;
+  if (ev.type) selectFormType(ev.type);
+  document.getElementById('form-title').value = ev.title || '';
+  document.getElementById('form-start-time').value = ev.startTime || '';
+  document.getElementById('form-end-time').value = ev.endTime || '';
+  document.getElementById('form-location').value = ev.location || '';
+  document.getElementById('form-memo').value = ev.memo || '';
+
+  showSheet('form-sheet');
+}
+
+function selectFormActor(actor) {
+  document.getElementById('form-actor').value = actor;
+  document.querySelectorAll('.actor-select-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.actor === actor);
+    if (b.dataset.actor === actor) {
+      const ac = ACTORS[actor];
+      b.style.background = ac ? ac.bg.replace('0.85','0.2') : 'var(--bg4)';
+      b.style.borderColor = ac ? ac.color : 'var(--accent)';
+      b.style.color = ac ? ac.color : 'var(--accent)';
+    } else {
+      b.style.background = '';
+      b.style.borderColor = '';
+      b.style.color = '';
+    }
+  });
+}
+
+function selectFormType(type) {
+  document.getElementById('form-type').value = type;
+  document.querySelectorAll('.type-select-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.type === type);
+  });
+}
+
+function submitEventForm(e) {
+  e.preventDefault();
+  const actor = document.getElementById('form-actor').value;
+  const type = document.getElementById('form-type').value;
+  const date = document.getElementById('form-date').value;
+  const title = document.getElementById('form-title').value.trim();
+
+  if (!actor) { showToast('배우를 선택해주세요'); return; }
+  if (!type) { showToast('일정 유형을 선택해주세요'); return; }
+  if (!date) { showToast('날짜를 선택해주세요'); return; }
+  if (!title) { showToast('제목을 입력해주세요'); return; }
+
+  const eventData = {
+    id: editingEventId || 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    actor, date, type, title,
+    startTime: document.getElementById('form-start-time').value,
+    endTime: document.getElementById('form-end-time').value,
+    location: document.getElementById('form-location').value.trim(),
+    memo: document.getElementById('form-memo').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (editingEventId) {
+    const idx = state.events.findIndex(e => e.id === editingEventId);
+    if (idx !== -1) state.events[idx] = eventData;
+    pushToServer('update', eventData);
+    showToast('수정되었습니다');
+  } else {
+    state.events.push(eventData);
+    pushToServer('add', eventData);
+    showToast('일정이 추가되었습니다');
+  }
+
+  saveToStorage();
+  closeFormSheet();
+  renderCurrentView();
+
+  // Jump to that month
+  const d = new Date(eventData.date);
+  if (d.getFullYear() !== state.year || d.getMonth() !== state.month) {
+    state.year = d.getFullYear();
+    state.month = d.getMonth();
+    renderCurrentView();
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════
+
+function openSettings() {
+  document.getElementById('settings-api-url').value = state.apiUrl;
+  const status = document.getElementById('sync-status');
+  status.textContent = state.apiUrl ? '연결됨' : '미연결';
+  status.className = 'sync-status' + (state.apiUrl ? ' ok' : '');
+  showSheet('settings-sheet');
+}
+
+function closeSettingsSheet() { hideSheet('settings-sheet'); }
+
+// ═══════════════════════════════════════════════
+//  EXPORT / IMPORT
+// ═══════════════════════════════════════════════
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state.events, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'mym-schedule-' + dateKey(new Date()) + '.json';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('내보내기 완료');
+}
+
+function triggerImport() {
+  document.getElementById('import-input').click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Invalid format');
+      state.events = data;
+      saveToStorage();
+      renderCurrentView();
+      showToast(`${data.length}개 일정을 가져왔습니다`);
+    } catch(err) {
+      showToast('파일 형식이 올바르지 않습니다');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ═══════════════════════════════════════════════
+//  SHEET MANAGEMENT
+// ═══════════════════════════════════════════════
+
+function showSheet(id) {
+  document.getElementById('overlay').classList.add('visible');
+  document.getElementById(id).classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideSheet(id) {
+  document.getElementById(id).classList.remove('visible');
+  const anyVisible = document.querySelector('.bottom-sheet.visible');
+  if (!anyVisible) {
+    document.getElementById('overlay').classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+}
+
+function closeAllSheets() {
+  document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('visible'));
+  document.getElementById('overlay').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+function closeDaySheet() { hideSheet('day-sheet'); }
+function closeFormSheet() { hideSheet('form-sheet'); }
+
+// Swipe down to close
+let touchStartY = 0;
+document.querySelectorAll('.bottom-sheet').forEach(sheet => {
+  sheet.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener('touchend', e => {
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (dy > 80) {
+      const id = sheet.id;
+      hideSheet(id);
+    }
+  }, { passive: true });
+});
+
+// ═══════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+
+loadFromStorage();
+renderCurrentView();
+
+if (state.apiUrl) {
+  syncFromServer();
+}
+
+// Today button: tap month label to go to today
+document.getElementById('month-label').addEventListener('click', () => {
+  const now = new Date();
+  state.year = now.getFullYear();
+  state.month = now.getMonth();
+  renderCurrentView();
+});
+</script>
+</body>
+</html>
