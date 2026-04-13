@@ -603,7 +603,35 @@ function loadAll() {
     try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); state.apiUrl = s.apiUrl || DEFAULT_API; } catch(e) { state.apiUrl = DEFAULT_API; }
 }
 function saveEvents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events)); }
-function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.users)); }
+function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.users)); pushUsersToServer(); }
+
+// 유저 정보 서버 동기화
+async function pushUsersToServer() {
+  if (!state.apiUrl) return;
+  try {
+    await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'saveUsers', key: API_KEY, users: state.users })
+    });
+  } catch(e) {}
+}
+async function loadUsersFromServer() {
+  if (!state.apiUrl) return;
+  try {
+    const res = await fetch(state.apiUrl + '?action=loadUsers&key=' + API_KEY + '&t=' + Date.now());
+    const data = JSON.parse(await res.text());
+    if (Array.isArray(data.users) && data.users.length > 0) {
+      state.users = data.users;
+      localStorage.setItem(USERS_KEY, JSON.stringify(state.users));
+      // 현재 로그인된 유저 정보도 갱신
+      if (state.currentUser) {
+        const fresh = state.users.find(u => u.id === state.currentUser.id);
+        if (fresh) state.currentUser = fresh;
+      }
+    }
+  } catch(e) {}
+}
 
 function getUser(id) { return state.users.find(u => u.id === id); }
 function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
@@ -612,13 +640,17 @@ function canEdit() { return state.currentUser && state.currentUser.canEdit; }
 // ═══════════════════════════════════════════════════
 //  AUTH
 // ═══════════════════════════════════════════════════
-function doLogin() {
+async function doLogin() {
   const id = document.getElementById('login-id').value.trim();
   const pw = document.getElementById('login-pw').value;
   const remember = document.getElementById('login-remember').checked;
   const errEl = document.getElementById('login-error');
 
   if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력해주세요'; return; }
+
+  // 로그인 시 서버에서 최신 계정 정보 가져오기
+  errEl.textContent = '로그인 중...';
+  await loadUsersFromServer();
 
   const user = state.users.find(u => u.id === id && u.pw === pw);
   if (!user) { errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다'; return; }
@@ -689,7 +721,7 @@ function startApp() {
 
   buildActorFilter();
   renderCurrentView();
-  if (state.apiUrl) syncFromServer();
+  if (state.apiUrl) { loadUsersFromServer(); syncFromServer(); }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1136,6 +1168,8 @@ function openAdmin() {
   showSheet('admin-sheet');
 }
 
+let editingUserId = null;
+
 function renderAdminPanel() {
   const roleBadgeHtml = u =>
     u.role==='admin'?'<span class="badge-admin">관리자</span>':
@@ -1147,15 +1181,17 @@ function renderAdminPanel() {
   state.users.forEach(u=>{
     const ac=u.actors&&u.actors.length===1?ACTORS[u.actors[0]]:{color:'#64748b'};
     const isSelf=u.id===state.currentUser.id;
-    html+=`<div class="user-row">
+    html+=`<div class="user-row" style="flex-wrap:wrap;">
       <div class="user-row-dot" style="background:${ac.color}"></div>
       <div class="user-row-info">
         <div class="user-row-name">${u.id} ${roleBadgeHtml(u)} ${isSelf?'<span style="font-size:10px;color:var(--text3)">(나)</span>':''}</div>
         <div class="user-row-role">${u.label||u.id}${u.actors&&u.actors.length?' · '+u.actors.join(', '):''}${u.canEdit?'':' · 읽기전용'}</div>
       </div>
       <div class="user-row-actions">
-        ${!isSelf?`<button class="btn-small danger" onclick="adminDeleteUser('${u.id}')">삭제</button>`:''}
+        ${!isSelf?`<button class="btn-small" onclick="adminEditUser('${u.id}')">수정</button>
+        <button class="btn-small danger" onclick="adminDeleteUser('${u.id}')">삭제</button>`:''}
       </div>
+      ${editingUserId===u.id?renderEditForm(u):''}
     </div>`;
   });
 
@@ -1201,6 +1237,75 @@ function renderAdminPanel() {
   </div>`;
 
   document.getElementById('admin-sheet-body').innerHTML=html;
+}
+
+function renderEditForm(u) {
+  const actorChecks = ACTOR_LIST.map(a =>
+    `<label style="display:flex;align-items:center;gap:4px;font-size:12px;">
+      <input type="checkbox" class="edit-actor-chk" value="${a}" ${u.actors&&u.actors.includes(a)?'checked':''} style="accent-color:${ACTORS[a].color}"> ${a}</label>`
+  ).join('');
+  return `<div style="width:100%;background:var(--bg);border-radius:8px;padding:12px;margin-top:8px;">
+    <div class="form-section">
+      <label class="form-label">이름/설명</label>
+      <input type="text" class="form-input" id="edit-label" value="${u.label||u.id}" style="margin-bottom:8px;">
+    </div>
+    <div class="form-section">
+      <label class="form-label">비밀번호 재설정</label>
+      <input type="text" class="form-input" id="edit-pw" placeholder="변경 시 입력 (비우면 유지)" style="margin-bottom:8px;">
+    </div>
+    <div class="form-section">
+      <label class="form-label">권한</label>
+      <select class="form-select" id="edit-role" onchange="document.getElementById('edit-actors-wrap').style.display=this.value==='actor'?'':'none'" style="margin-bottom:8px;">
+        <option value="actor" ${u.role==='actor'?'selected':''}>담당자</option>
+        <option value="admin" ${u.role==='admin'?'selected':''}>관리자</option>
+        <option value="viewer" ${u.role==='viewer'?'selected':''}>뷰어</option>
+      </select>
+    </div>
+    <div class="form-section" id="edit-actors-wrap" style="display:${u.role==='actor'?'':'none'}">
+      <label class="form-label">담당 배우</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">${actorChecks}</div>
+    </div>
+    <div class="form-section">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;margin-bottom:10px;">
+        <input type="checkbox" id="edit-canedit" ${u.canEdit!==false?'checked':''} style="accent-color:var(--accent)">
+        편집 가능
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn-small" onclick="adminSaveEdit('${u.id}')" style="background:var(--accent);color:white;border-color:var(--accent);">저장</button>
+      <button class="btn-small" onclick="editingUserId=null;renderAdminPanel();">취소</button>
+    </div>
+  </div>`;
+}
+
+function adminEditUser(id) {
+  editingUserId = editingUserId === id ? null : id;
+  renderAdminPanel();
+}
+
+function adminSaveEdit(id) {
+  const idx = state.users.findIndex(u => u.id === id);
+  if (idx === -1) return;
+
+  const label = document.getElementById('edit-label').value.trim();
+  const pw = document.getElementById('edit-pw').value.trim();
+  const role = document.getElementById('edit-role').value;
+  const canEditVal = document.getElementById('edit-canedit').checked;
+  const actors = role === 'actor' ?
+    [...document.querySelectorAll('.edit-actor-chk:checked')].map(c => c.value) : [];
+
+  if (role === 'actor' && actors.length === 0) { showToast('담당 배우를 선택해주세요'); return; }
+
+  state.users[idx].label = label || id;
+  state.users[idx].role = role;
+  state.users[idx].canEdit = canEditVal;
+  state.users[idx].actors = actors;
+  if (pw) state.users[idx].pw = pw;
+
+  saveUsers();
+  editingUserId = null;
+  showToast(`${id} 계정이 수정되었습니다`);
+  renderAdminPanel();
 }
 
 function toggleActorPick(role) {
