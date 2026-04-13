@@ -463,6 +463,10 @@
         <input type="text" class="form-input" id="form-location" placeholder="장소 입력 (선택)">
       </div>
       <div class="form-section">
+        <label class="form-label">동행 / 스텝</label>
+        <input type="text" class="form-input" id="form-staff" placeholder="예: 매니저 김OO, 스타일리스트 이OO (선택)">
+      </div>
+      <div class="form-section">
         <label class="form-label">메모</label>
         <textarea class="form-textarea" id="form-memo" placeholder="메모 입력 (선택)"></textarea>
       </div>
@@ -894,7 +898,8 @@ function renderDayBody(ds) {
           ${ev.location?`<span>📍 ${ev.location}</span>`:''}
           ${ev.type?`<span>${EVENT_TYPES[ev.type]||''} ${ev.type}</span>`:''}
         </div>
-        ${ev.memo?`<div style="margin-top:6px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
+        ${ev.staff?`<div style="margin-top:5px;font-size:12px;color:var(--text2);line-height:1.5;">👥 ${ev.staff}</div>`:''}
+        ${ev.memo?`<div style="margin-top:5px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
         ${userCanEdit?`<div class="event-card-actions">
           <button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>
           <button class="btn-delete" onclick="deleteEvent('${ev.id}','${ds}')">🗑 삭제</button>
@@ -975,6 +980,7 @@ function openEditSheet(id) {
   document.getElementById('form-start-time').value=ev.startTime||'';
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
+  document.getElementById('form-staff').value=ev.staff||'';
   document.getElementById('form-memo').value=ev.memo||'';
   showSheet('form-sheet');
 }
@@ -1010,6 +1016,7 @@ function submitEventForm(e) {
     startTime:document.getElementById('form-start-time').value,
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
+    staff:document.getElementById('form-staff').value.trim(),
     memo:document.getElementById('form-memo').value.trim(),
     updatedAt:new Date().toISOString()
   };
