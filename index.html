@@ -656,7 +656,11 @@
         oninput="calcStaffTime()">
     </div>
   </div>
-  <div id="stm-calc" style="text-align:center;font-size:13px;color:var(--accent);min-height:20px;margin-bottom:14px;"></div>
+  <div id="stm-calc" style="text-align:center;font-size:13px;color:var(--accent);min-height:20px;margin-bottom:10px;"></div>
+  <div style="margin-bottom:12px;">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">메모 (선택)</div>
+    <textarea id="stm-memo" rows="2" placeholder="특이사항, 추가 내용..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:13px;box-sizing:border-box;resize:none;font-family:inherit;"></textarea>
+  </div>
   <div style="display:flex;gap:8px;">
     <button onclick="closeStaffTimeModal()" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:14px;cursor:pointer;">취소</button>
     <button onclick="saveStaffTime()" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:8px;color:white;font-size:14px;font-weight:600;cursor:pointer;">저장</button>
@@ -1070,7 +1074,8 @@ function renderDayBody(ds) {
     const ac=ACTORS[ev.actor]||{};
     const t=ev.startTime?(ev.endTime?`${ev.startTime} ~ ${ev.endTime}`:ev.startTime):'';
     const userCanEdit = canEdit() && (isAdmin() || (state.currentUser.actors||[]).includes(ev.actor));
-    const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
+    const isPrivate = isHidden(ev);
+    const isCreator = ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id;
 
     if (isPrivate) {
       // 비공개: 작성자·관리자에게만 세부내용 표시
@@ -1082,7 +1087,6 @@ function renderDayBody(ds) {
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">작성자 및 관리자만 열람할 수 있습니다</div>
       </div>`;
     } else {
-      const isCreator = ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id;
       const showEdit = userCanEdit || isCreator;
       const staffHtml = formatStaffDisplay(ev.staff);
       html+=`<div class="event-card" style="border-left-color:${ac.color||'#3b82f6'}">
@@ -1198,7 +1202,7 @@ function initStaffTags(existingStaff) {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         STAFF_CATS.forEach(c => {
           staffData[c] = Array.isArray(parsed[c])
-            ? parsed[c].map(item => typeof item === 'string' ? {name: item, startTime: '', endTime: '', hours: ''} : item)
+            ? parsed[c].map(item => typeof item === 'string' ? {name: item, startTime: '', endTime: '', hours: '', memo: ''} : item)
             : [];
         });
       }
@@ -1228,6 +1232,8 @@ function renderStaffTags() {
       } else if (hr) {
         badge = '<span style="background:rgba(99,179,237,0.2);color:#90cdf4;border-radius:3px;padding:0 5px;font-size:10px;margin-left:4px;">' + hr + 'h</span>';
       }
+      var mo = typeof item === 'string' ? '' : (item.memo||'');
+      if (mo) badge += '<span style="color:var(--text3);font-size:10px;margin-left:3px;" title="' + mo + '">📝</span>';
       return '<div class="staff-tag" style="cursor:pointer;" onclick="openStaffTimeModal(' + ci + ',' + ti + ')" title="클릭하여 근무시간 수정">' + nm + badge + '<button type="button" class="staff-tag-del" onclick="event.stopPropagation();removeStaffTag(' + ci + ',' + ti + ')">×</button></div>';
     }).join('');
     return '<div class="staff-category">'
@@ -1267,7 +1273,7 @@ function addStaffTag(ci) {
   var hours = calcTimeHours(startTime, endTime);
   var cat = STAFF_CATS[ci];
   if (!staffData[cat]) staffData[cat] = [];
-  staffData[cat].push({name: name, startTime: startTime, endTime: endTime, hours: hours});
+  staffData[cat].push({name: name, startTime: startTime, endTime: endTime, hours: hours, memo: ''});
   if (input)   input.value   = '';
   if (startEl) startEl.value = '';
   if (endEl)   endEl.value   = '';
@@ -1285,9 +1291,11 @@ function openStaffTimeModal(ci, ti) {
   var nm = typeof item === 'string' ? item : (item.name||'');
   var st = typeof item === 'string' ? '' : (item.startTime||'');
   var en = typeof item === 'string' ? '' : (item.endTime||'');
+  var mo = typeof item === 'string' ? '' : (item.memo||'');
   document.getElementById('stm-name').textContent = nm;
   document.getElementById('stm-start').value = st;
   document.getElementById('stm-end').value   = en;
+  document.getElementById('stm-memo').value  = mo;
   calcStaffTime();
   document.getElementById('staff-time-overlay').style.display = 'block';
   document.getElementById('staff-time-modal').style.display   = 'block';
@@ -1312,8 +1320,9 @@ function saveStaffTime() {
   var nm   = typeof item === 'string' ? item : (item.name||'');
   var st   = document.getElementById('stm-start').value;
   var en   = document.getElementById('stm-end').value;
+  var mo   = document.getElementById('stm-memo').value.trim();
   var hours = calcTimeHours(st, en);
-  staffData[cat][_stmTi] = {name: nm, startTime: st, endTime: en, hours: hours};
+  staffData[cat][_stmTi] = {name: nm, startTime: st, endTime: en, hours: hours, memo: mo};
   closeStaffTimeModal();
   renderStaffTags();
   syncStaffHidden();
@@ -1850,6 +1859,15 @@ function onExportPeriodChange() {
   document.getElementById('export-year-wrap').style.display  = p === 'all'   ? 'none' : '';
 }
 
+function calcTimeHoursStr(start, end) {
+  if (!start || !end) return '';
+  var s = start.split(':').map(Number), e = end.split(':').map(Number);
+  var diff = (e[0]*60+e[1]) - (s[0]*60+s[1]);
+  if (diff <= 0) diff += 1440;
+  var h = diff / 60;
+  return h === Math.floor(h) ? String(h) : h.toFixed(1);
+}
+
 async function generateExcel() {
   if (typeof ExcelJS === 'undefined') {
     showToast('❌ 라이브러리 로딩 중... 잠시 후 다시 시도해주세요');
@@ -1969,11 +1987,17 @@ async function generateExcel() {
         STAFF_CATS.forEach(function(c) {
           (obj[c]||[]).forEach(function(item) {
             var nm = typeof item === 'string' ? item : (item.name||'');
-            var st = typeof item === 'string' ? '' : (item.startTime||'');
-            var en = typeof item === 'string' ? '' : (item.endTime||'');
-            var hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
+            var indivSt = typeof item === 'string' ? '' : (item.startTime||'');
+            var indivEn = typeof item === 'string' ? '' : (item.endTime||'');
+            var indivHr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
+            var staffMemo = typeof item === 'string' ? '' : (item.memo||'');
             if (!nm) return;
-            var row = ws1.addRow(base.concat([c, nm, st, en, hr, ev.memo||'']));
+            // 개별 시간 없으면 일정 전체 시간 기본값 사용
+            var st = indivSt || ev.startTime || '';
+            var en = indivEn || ev.endTime   || '';
+            var hr = indivHr !== '' ? indivHr : (indivSt ? '' : (ev.startTime && ev.endTime ? calcTimeHoursStr(ev.startTime, ev.endTime) : ''));
+            var memo = [ev.memo||'', staffMemo].filter(Boolean).join(' / ');
+            var row = ws1.addRow(base.concat([c, nm, st, en, hr, memo]));
             applyDataRow(row, dataIdx1++);
             hasStaff = true;
           });
@@ -1990,13 +2014,13 @@ async function generateExcel() {
   var ws2 = wb.addWorksheet('일정별요약', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws2.columns = [
     { width: 12 }, { width: 5 }, { width: 8 }, { width: 8 }, { width: 26 },
-    { width: 8  }, { width: 8 }, { width: 16 }, { width: 10 }, { width: 32 },
-    { width: 12 }, { width: 22 }
+    { width: 8  }, { width: 8 }, { width: 16 }, { width: 10 }, { width: 36 },
+    { width: 22 }
   ];
-  applyTitle(ws2, 'MYM 스케줄 — 일정별 요약', periodStr, 12);
-  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','시작','종료','장소','동행인원','동행/스텝','총근무(h)','메모']);
-  applyHeader(hdr2, 12);
-  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
+  applyTitle(ws2, 'MYM 스케줄 — 일정별 요약', periodStr, 11);
+  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','시작','종료','장소','동행인원','동행/스텝','메모']);
+  applyHeader(hdr2, 11);
+  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
 
   var dataIdx2 = 0;
   evts.forEach(function(ev) {
@@ -2021,7 +2045,7 @@ async function generateExcel() {
       ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
       ev.startTime||'', ev.endTime||'', ev.location||'',
       staffCount || '', staffNames.join(', '),
-      totalHours || '', ev.memo||''
+      ev.memo||''
     ]);
     applyDataRow(row, dataIdx2++);
   });
