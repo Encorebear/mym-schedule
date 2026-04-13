@@ -583,7 +583,8 @@ function loadAll() {
     const stored = JSON.parse(localStorage.getItem(USERS_KEY));
     state.users = stored && stored.length ? stored : JSON.parse(JSON.stringify(DEFAULT_USERS));
   } catch(e) { state.users = JSON.parse(JSON.stringify(DEFAULT_USERS)); }
-  const DEFAULT_API = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+    const DEFAULT_API = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+  const API_KEY = 'MYM_K9xpR7vL2024';
   try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); state.apiUrl = s.apiUrl || DEFAULT_API; } catch(e) { state.apiUrl = DEFAULT_API; }
 }
 function saveEvents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events)); }
@@ -1220,17 +1221,26 @@ async function syncFromServer(showIndicator) {
   if (!state.apiUrl) return;
   if (showIndicator) showToast('🔄 동기화 중...');
   try {
-    const res = await fetch(state.apiUrl + '?action=load&t=' + Date.now());
+    const res = await fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now(), { redirect: 'follow' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
     if (Array.isArray(data.events)) {
-      state.events = data.events;
-      saveEvents();
-      renderCurrentView();
-      if (showIndicator) showToast('✅ 동기화 완료');
+      if (data.events.length === 0 && state.events.length > 0) {
+        // 서버가 비어있고 로컬에 데이터 있으면 → 로컬 데이터를 서버에 업로드
+        await pushAllToServer();
+        if (showIndicator) showToast('✅ 로컬 데이터를 서버에 업로드했습니다');
+      } else {
+        // 서버 데이터가 있으면 서버 기준으로 동기화
+        state.events = data.events;
+        saveEvents();
+        renderCurrentView();
+        if (showIndicator) showToast('✅ 동기화 완료 (' + data.events.length + '개 일정)');
+      }
     }
   } catch(e) {
-    if (showIndicator) showToast('❌ 동기화 실패: 연결 확인 필요');
+    if (showIndicator) showToast('❌ 동기화 실패: ' + e.message);
   }
 }
 
@@ -1240,7 +1250,7 @@ async function pushAllToServer() {
     await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'save', events: state.events })
+      body: JSON.stringify({ action: 'save', key: API_KEY, events: state.events })
     });
   } catch(e) {}
 }
