@@ -8,7 +8,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>MYM 스케줄 통합</title>
+<meta name="apple-mobile-web-app-title" content="MYM 스케줄">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1117">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<title>MYM 스케줄</title>
 <style>
   :root {
     --bg: #0f1117; --bg2: #161b27; --bg3: #1e2535; --bg4: #252d3d;
@@ -1350,6 +1356,14 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
+// Service Worker 등록 (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .catch(err => console.log('SW 등록 실패:', err));
+  });
+}
+
 loadAll();
 if (tryAutoLogin()) startApp();
 else document.getElementById('login-screen').style.display='flex';
