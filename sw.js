@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mym-schedule-v5';
+const CACHE_NAME = 'mym-schedule-v6';
 const ASSETS = [
   '/mym-schedule/',
   '/mym-schedule/index.html',
@@ -7,25 +7,27 @@ const ASSETS = [
   '/mym-schedule/icon-512.png'
 ];
 
-// 설치: 핵심 파일 캐시
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
-  self.skipWaiting(); // 즉시 활성화
+  self.skipWaiting();
 });
 
-// 활성화: 이전 캐시 전체 삭제
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
-  self.clients.claim(); // 열린 탭 즉시 제어
+  self.clients.claim();
 });
 
-// 요청 처리: 네트워크 우선, 실패 시 캐시
+// 페이지에서 SKIP_WAITING 메시지 받으면 즉시 활성화
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', e => {
   if (e.request.url.includes('script.google.com')) return;
   if (e.request.url.includes('cdnjs.cloudflare.com')) return;

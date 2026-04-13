@@ -1854,11 +1854,29 @@ function generateExcel() {
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
-// Service Worker 등록 (PWA)
+// Service Worker 등록 (PWA) - 업데이트 감지 시 자동 새로고침
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .catch(err => console.log('SW 등록 실패:', err));
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // 새 SW가 설치되면 바로 활성화 요청
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'activated') {
+            window.location.reload();
+          }
+        });
+      });
+      // 이미 대기 중인 SW가 있으면 즉시 활성화
+      if (reg.waiting) {
+        reg.waiting.postMessage({type: 'SKIP_WAITING'});
+      }
+    }).catch(err => console.log('SW 등록 실패:', err));
+
+    // 새 SW가 제어권을 가져가면 자동 새로고침
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.location.reload();
+    });
   });
 }
 
