@@ -629,9 +629,8 @@
       <input type="text" class="form-input" id="export-staff-name" placeholder="예: 김헤어 (비우면 전체)">
     </div>
     <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.7;">
-      📄 <b>전체일정</b> — 일정별 동행 스텝 + 총 근무시간<br>
-      👥 <b>스텝근무내역</b> — 스텝 1인 1행, 근무시간 기록<br>
-      📊 <b>스텝별요약</b> — 이름별 총 참여 횟수 + 총 시간
+      📄 <b>전체일정</b> — 스텝 1인 1행 상세 (출근·퇴근·근무시간)<br>
+      📊 <b>일정별요약</b> — 일정 1행, 총 동행인원·총 근무시간 집계
     </div>
     <button class="btn-submit" onclick="generateExcel()">📥 엑셀 다운로드</button>
     <div id="export-status" style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px;min-height:18px;"></div>
@@ -1987,75 +1986,45 @@ async function generateExcel() {
     }
   });
 
-  // ══ Sheet 2: 스텝 근무 내역 ═════════════════════
-  var ws2 = wb.addWorksheet('스텝근무내역', { views: [{ state: 'frozen', ySplit: 3 }] });
+  // ══ Sheet 2: 일정별 요약 (일정 1행, 스텝 집계) ═════════════════
+  var ws2 = wb.addWorksheet('일정별요약', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws2.columns = [
-    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
-    { width: 8  }, { width: 8  }, { width: 16 }, { width: 12 }, { width: 14 },
-    { width: 8  }, { width: 8  }, { width: 11 }
+    { width: 12 }, { width: 5 }, { width: 8 }, { width: 8 }, { width: 26 },
+    { width: 8  }, { width: 8 }, { width: 16 }, { width: 10 }, { width: 32 },
+    { width: 12 }, { width: 22 }
   ];
-  applyTitle(ws2, 'MYM 스케줄 — 스텝 근무 내역', periodStr, 13);
-  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무(h)']);
-  applyHeader(hdr2, 13);
-  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 13 } };
+  applyTitle(ws2, 'MYM 스케줄 — 일정별 요약', periodStr, 12);
+  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','시작','종료','장소','동행인원','동행/스텝','총근무(h)','메모']);
+  applyHeader(hdr2, 12);
+  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
 
   var dataIdx2 = 0;
   evts.forEach(function(ev) {
     var d = new Date(ev.date);
-    if (!ev.staff) return;
-    try {
-      var obj = JSON.parse(ev.staff);
-      STAFF_CATS.forEach(function(c) {
-        (obj[c]||[]).forEach(function(item) {
-          var nm = typeof item === 'string' ? item : (item.name||'');
-          var st = typeof item === 'string' ? '' : (item.startTime||'');
-          var en = typeof item === 'string' ? '' : (item.endTime||'');
-          var hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
-          if (!nm) return;
-          if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
-          var row = ws2.addRow([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-            ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, st, en, hr]);
-          applyDataRow(row, dataIdx2++);
+    var staffNames = [], totalHours = 0, staffCount = 0;
+    if (ev.staff) {
+      try {
+        var obj = JSON.parse(ev.staff);
+        STAFF_CATS.forEach(function(c) {
+          (obj[c]||[]).forEach(function(item) {
+            var nm = typeof item === 'string' ? item : (item.name||'');
+            var hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
+            if (!nm) return;
+            staffNames.push(nm + (hr ? '(' + hr + 'h)' : ''));
+            totalHours += hr;
+            staffCount++;
+          });
         });
-      });
-    } catch(e) {}
+      } catch(e) {}
+    }
+    var row = ws2.addRow([
+      ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+      ev.startTime||'', ev.endTime||'', ev.location||'',
+      staffCount || '', staffNames.join(', '),
+      totalHours || '', ev.memo||''
+    ]);
+    applyDataRow(row, dataIdx2++);
   });
-
-  // ══ Sheet 3: 스텝별 요약 ════════════════════════
-  var ws3 = wb.addWorksheet('스텝별요약', { views: [{ state: 'frozen', ySplit: 3 }] });
-  ws3.columns = [{ width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }];
-  applyTitle(ws3, 'MYM 스케줄 — 스텝별 요약', periodStr, 4);
-  var hdr3 = ws3.addRow(['스텝 이름','카테고리','참여 일정 수','총 근무시간(h)']);
-  applyHeader(hdr3, 4);
-  ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 4 } };
-
-  var summary = {};
-  evts.forEach(function(ev) {
-    if (!ev.staff) return;
-    try {
-      var obj = JSON.parse(ev.staff);
-      STAFF_CATS.forEach(function(c) {
-        (obj[c]||[]).forEach(function(item) {
-          var nm = typeof item === 'string' ? item : (item.name||'');
-          var hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
-          if (!nm) return;
-          if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
-          var key = nm + '|' + c;
-          if (!summary[key]) summary[key] = { name: nm, cat: c, hours: 0, cnt: 0 };
-          summary[key].hours += hr;
-          summary[key].cnt++;
-        });
-      });
-    } catch(e) {}
-  });
-
-  var dataIdx3 = 0;
-  Object.values(summary)
-    .sort(function(a, b) { return (b.hours - a.hours) || a.name.localeCompare(b.name); })
-    .forEach(function(s) {
-      var row = ws3.addRow([s.name, s.cat, s.cnt, s.hours || '']);
-      applyDataRow(row, dataIdx3++);
-    });
 
   // ── 파일명 ──
   var fname = 'MYM스케줄';
