@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="refresh" content="300">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0f1117; color: #e2e8f0;
+  font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  padding: 12px; min-height: 100vh;
+}
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.title { font-size: 13px; font-weight: 700; color: #3b82f6; }
+.date { font-size: 11px; color: #64748b; }
+
+.mini-cal {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px; margin-bottom: 10px;
+}
+.mini-cal .dow {
+  text-align: center; font-size: 9px; color: #64748b;
+  padding: 2px 0; font-weight: 600;
+}
+.mini-cal .dow:nth-child(7) { color: #f87171; }
+.mini-cal .day {
+  text-align: center; font-size: 10px; color: #94a3b8;
+  padding: 3px 0; border-radius: 4px;
+}
+.mini-cal .day.today {
+  background: #3b82f6; color: white; font-weight: 700;
+}
+.mini-cal .day.has-event { position: relative; }
+.mini-cal .day.has-event::after {
+  content: ''; position: absolute; bottom: 1px;
+  left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #f472b6;
+}
+.mini-cal .day.other { color: #2a3347; }
+
+.divider { height: 1px; background: #1e2535; margin: 8px 0; }
+
+.events-title {
+  font-size: 10px; color: #64748b; font-weight: 600;
+  margin-bottom: 6px; text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.event-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid #1e2535;
+}
+.event-row:last-child { border-bottom: none; }
+.event-bar {
+  width: 3px; border-radius: 2px; min-height: 24px; align-self: stretch;
+}
+.event-info { flex: 1; min-width: 0; }
+.event-title {
+  font-size: 11px; font-weight: 600; color: #e2e8f0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.event-meta {
+  font-size: 9px; color: #64748b;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.no-events {
+  text-align: center; color: #475569; font-size: 11px;
+  padding: 12px 0;
+}
+
+.loading { text-align: center; color: #475569; font-size: 11px; padding: 16px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="title">MYM 스케줄</div>
+  <div class="date" id="today-label"></div>
+</div>
+
+<div class="mini-cal" id="mini-cal"></div>
+
+<div class="divider"></div>
+
+<div class="events-title">오늘 일정</div>
+<div id="events-container"><div class="loading">불러오는 중...</div></div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+const API_KEY = 'MYM_K9xpR7vL2024';
+
+const ACTORS = {
+  'LMH':  '#60a5fa', 'LSJ':  '#f472b6', 'KM':   '#a78bfa',
+  'KMJ':  '#fbbf24', 'LSH':  '#34d399', 'PJS':  '#f87171'
+};
+const TYPES = {'촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','광고':'📢','기타':'📌','비공개':'🔒'};
+
+const now = new Date();
+const DOW = ['일','월','화','수','목','금','토'];
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+
+// Today label
+document.getElementById('today-label').textContent =
+  `${now.getMonth()+1}/${now.getDate()} (${DOW[now.getDay()]})`;
+
+// Mini calendar
+function renderMiniCal(eventDates) {
+  const cal = document.getElementById('mini-cal');
+  const y = now.getFullYear(), m = now.getMonth();
+  const todayKey = dateKey(now);
+  const first = new Date(y, m, 1);
+  let startDow = first.getDay(); startDow = startDow === 0 ? 6 : startDow - 1;
+  const dim = new Date(y, m + 1, 0).getDate();
+
+  let html = '';
+  ['월','화','수','목','금','토','일'].forEach(d =>
+    html += `<div class="dow">${d}</div>`);
+
+  // Prev month fill
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = new Date(y, m, -i);
+    html += `<div class="day other">${d.getDate()}</div>`;
+  }
+  // Current month
+  for (let d = 1; d <= dim; d++) {
+    const key = dateKey(new Date(y, m, d));
+    const cls = ['day'];
+    if (key === todayKey) cls.push('today');
+    if (eventDates.has(key)) cls.push('has-event');
+    html += `<div class="${cls.join(' ')}">${d}</div>`;
+  }
+  // Next month fill
+  let total = startDow + dim;
+  let ni = 1;
+  while (total % 7 !== 0) {
+    html += `<div class="day other">${ni++}</div>`;
+    total++;
+  }
+  cal.innerHTML = html;
+}
+
+// Fetch & render
+async function loadEvents() {
+  try {
+    const res = await fetch(API_URL + '?action=load&key=' + API_KEY + '&t=' + Date.now());
+    const data = await res.json();
+    const events = data.events || [];
+
+    const todayKey = dateKey(now);
+    const todayEvents = events
+      .filter(e => e.date === todayKey)
+      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
+    // Event dates for dots
+    const eventDates = new Set(events.map(e => e.date));
+    renderMiniCal(eventDates);
+
+    // Today events
+    const container = document.getElementById('events-container');
+    if (!todayEvents.length) {
+      container.innerHTML = '<div class="no-events">오늘 일정이 없습니다</div>';
+      return;
+    }
+
+    container.innerHTML = todayEvents.map(ev => {
+      const color = ACTORS[ev.actor] || '#3b82f6';
+      const emoji = TYPES[ev.type] || '';
+      const time = ev.startTime ? (ev.endTime ? `${ev.startTime}~${ev.endTime}` : ev.startTime) : '';
+      return `<div class="event-row">
+        <div class="event-bar" style="background:${color}"></div>
+        <div class="event-info">
+          <div class="event-title">${emoji} ${ev.title}</div>
+          <div class="event-meta">${ev.actor}${time ? ' · ' + time : ''}${ev.location ? ' · ' + ev.location : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('events-container').innerHTML =
+      '<div class="no-events">연결 실패</div>';
+    renderMiniCal(new Set());
+  }
+}
+
+loadEvents();
+</script>
+</body>
+</html>
