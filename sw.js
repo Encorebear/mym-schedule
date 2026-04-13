@@ -1,27 +1,24 @@
 const CACHE_NAME = 'mym-schedule-v9';
 
-// HTML·버전파일은 절대 캐시 안 함 (항상 네트워크에서 최신 로드)
+// HTML·버전파일은 절대 캐시 안 함 (GitHub Pages, Netlify 양쪽 경로 대응)
 function isNeverCache(url) {
   const p = new URL(url).pathname;
-  return p === '/mym-schedule/'
-    || p === '/mym-schedule/index.html'
+  return p === '/'
+    || p.endsWith('/index.html')
     || p.endsWith('/version.json')
     || p.endsWith('/sw.js');
 }
 
 self.addEventListener('install', e => {
-  // 즉시 활성화 (대기 없음)
   self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    // 이전 버전 캐시 전부 삭제
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() =>
-        // 열려있는 모든 탭에 업데이트 신호 전송
         self.clients.matchAll({ type: 'window' }).then(clients =>
           clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' }))
         )
