@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mym-schedule-v7';
+const CACHE_NAME = 'mym-schedule-v8';
 const ASSETS = [
   '/mym-schedule/',
   '/mym-schedule/index.html',
@@ -8,41 +8,32 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
-// activate: 구 캐시 삭제 후 열린 탭 전부 강제 새로고침
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.matchAll({ includeUncontrolled: true, type: 'window' }))
-      .then(clients => {
-        clients.forEach(client => client.navigate(client.url));
-      })
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
   );
   self.clients.claim();
 });
 
-self.addEventListener('message', e => {
-  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
-});
-
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('script.google.com')) return;
-  if (e.request.url.includes('cdnjs.cloudflare.com')) return;
+  // 이 경로들은 절대 캐시 안 함 → 항상 최신 서버 응답
+  const url = e.request.url;
+  if (url.includes('script.google.com')) return;
+  if (url.includes('cdnjs.cloudflare.com')) return;
+  if (url.includes('version.json')) return; // 버전 체크는 항상 서버에서
 
   e.respondWith(
     fetch(e.request)
       .then(res => {
         if (res && res.status === 200 && res.type === 'basic') {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
         }
         return res;
       })

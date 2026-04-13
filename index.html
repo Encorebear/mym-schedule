@@ -1854,31 +1854,35 @@ function generateExcel() {
 // ═══════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════
-// Service Worker 등록 (PWA) - 업데이트 감지 시 자동 새로고침
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      // 새 SW가 설치되면 바로 활성화 요청
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'activated') {
-            window.location.reload();
-          }
-        });
-      });
-      // 이미 대기 중인 SW가 있으면 즉시 활성화
-      if (reg.waiting) {
-        reg.waiting.postMessage({type: 'SKIP_WAITING'});
-      }
-    }).catch(err => console.log('SW 등록 실패:', err));
+// ── 앱 버전 체크: 서버 version.json과 비교해 캐시 강제 갱신 ──
+(async function checkVersion() {
+  const VERSION_KEY = 'mym_cached_version';
+  try {
+    // 캐시·SW 무시하고 서버에서 직접 가져옴
+    const res = await fetch('./version.json', { cache: 'no-store' });
+    const { version } = await res.json();
+    const stored = localStorage.getItem(VERSION_KEY);
+    if (stored !== version) {
+      // 버전이 다르면 SW + 캐시 전부 삭제 후 새로고침
+      localStorage.setItem(VERSION_KEY, version);
+      const unregAll = 'serviceWorker' in navigator
+        ? navigator.serviceWorker.getRegistrations()
+            .then(regs => Promise.all(regs.map(r => r.unregister())))
+        : Promise.resolve();
+      const clearAll = caches.keys()
+        .then(keys => Promise.all(keys.map(k => caches.delete(k))));
+      await Promise.all([unregAll, clearAll]);
+      window.location.reload(true);
+      return; // 아래 SW 등록 안 함
+    }
+  } catch(e) {} // 오프라인이면 그냥 진행
 
-    // 새 SW가 제어권을 가져가면 자동 새로고침
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      window.location.reload();
-    });
-  });
-}
+  // SW 등록 (오프라인 지원)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .catch(err => console.log('SW 등록 실패:', err));
+  }
+})();
 
 // ═══════════════════════════════════════════════════
 //  INIT
