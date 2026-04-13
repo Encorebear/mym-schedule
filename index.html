@@ -661,11 +661,15 @@ async function loadUsersFromServer() {
 function getUser(id) { return state.users.find(u => u.id === id); }
 function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
 function canEdit() { return state.currentUser && state.currentUser.canEdit; }
-// 비공개 일정: 작성자 본인 또는 관리자만 내용 열람 가능
+// 비공개 일정: 관리자 / 작성자 / 해당 배우 담당자만 열람 가능
 function isHidden(ev) {
   if (ev.type !== PRIVATE_TYPE) return false;
   if (isAdmin()) return false;
-  if (ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id) return false;
+  if (!state.currentUser) return true;
+  // 작성자 본인
+  if (ev.createdBy && ev.createdBy === state.currentUser.id) return false;
+  // 해당 배우 담당자 (actors 목록에 포함된 경우)
+  if (state.currentUser.actors && state.currentUser.actors.includes(ev.actor)) return false;
   return true;
 }
 
