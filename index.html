@@ -1059,17 +1059,15 @@ function openUserMenu() {
     <span class="menu-icon">🔒</span> 비밀번호 변경 <span class="menu-arrow">›</span></div>`;
 
   if (isAdmin()) {
-    html+=`<div class="menu-item" onclick="openSyncSettings()">
-      <span class="menu-icon">🔗</span> 동기화 설정
-      <span style="margin-left:6px;font-size:11px;color:${state.apiUrl?'var(--success)':'var(--text3)'};">${state.apiUrl?'연결됨':'미연결'}</span>
-      <span class="menu-arrow">›</span></div>`;
+    html+=`<div class="menu-item" onclick="pushAllToServer(true);closeUserMenu()">
+      <span class="menu-icon">📤</span> 이 기기 → 서버 업로드 <span class="menu-arrow">›</span></div>`;
     html+=`<div class="menu-item" onclick="syncFromServer(true);closeUserMenu()">
-      <span class="menu-icon">🔄</span> 지금 동기화 <span class="menu-arrow">›</span></div>`;
+      <span class="menu-icon">📥</span> 서버 → 이 기기 다운로드 <span class="menu-arrow">›</span></div>`;
     html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openAdmin()">
       <span class="menu-icon">👑</span> 계정 관리 <span class="menu-arrow">›</span></div>`;
   } else {
     html+=`<div class="menu-item" onclick="syncFromServer(true);closeUserMenu()">
-      <span class="menu-icon">🔄</span> 지금 동기화 <span class="menu-arrow">›</span></div>`;
+      <span class="menu-icon">📥</span> 서버에서 다운로드 <span class="menu-arrow">›</span></div>`;
   }
 
   html+=`<div class="menu-item danger" onclick="logout()">
@@ -1219,45 +1217,46 @@ function adminDeleteUser(id) {
 // ═══════════════════════════════════════════════════
 async function syncFromServer(showIndicator) {
   if (!state.apiUrl) return;
-  if (showIndicator) showToast('🔄 동기화 중...');
+  if (showIndicator) showToast('🔄 서버에서 불러오는 중...');
   try {
-    const res = await fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now(), { redirect: 'follow' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const res = await fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now());
+    const text = await res.text();
+    const data = JSON.parse(text);
+    if (data.error) throw new Error('인증 오류: ' + data.error);
 
     if (Array.isArray(data.events)) {
-      if (data.events.length === 0 && state.events.length > 0) {
-        // 서버가 비어있고 로컬에 데이터 있으면 → 로컬 데이터를 서버에 업로드
-        await pushAllToServer();
-        if (showIndicator) showToast('✅ 로컬 데이터를 서버에 업로드했습니다');
-      } else {
-        // 서버 데이터가 있으면 서버 기준으로 동기화
-        state.events = data.events;
-        saveEvents();
-        renderCurrentView();
-        if (showIndicator) showToast('✅ 동기화 완료 (' + data.events.length + '개 일정)');
-      }
+      state.events = data.events;
+      saveEvents();
+      renderCurrentView();
+      if (showIndicator) showToast('✅ 동기화 완료 (' + data.events.length + '개 일정)');
     }
   } catch(e) {
-    if (showIndicator) showToast('❌ 동기화 실패: ' + e.message);
+    if (showIndicator) showToast('❌ 실패: ' + e.message);
   }
 }
 
-async function pushAllToServer() {
-  if (!state.apiUrl) return;
+async function pushAllToServer(showIndicator) {
+  if (!state.apiUrl) return false;
+  if (showIndicator) showToast('📤 서버에 저장 중...');
   try {
-    await fetch(state.apiUrl, {
+    const res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'save', key: API_KEY, events: state.events })
     });
-  } catch(e) {}
+    const text = await res.text();
+    const data = JSON.parse(text);
+    if (showIndicator) showToast(data.ok ? '✅ 서버에 저장됐습니다 (' + state.events.length + '개)' : '❌ 저장 실패');
+    return !!data.ok;
+  } catch(e) {
+    if (showIndicator) showToast('❌ 저장 실패: ' + e.message);
+    return false;
+  }
 }
 
 function saveAndSync() {
   saveEvents();
-  pushAllToServer();
+  pushAllToServer(false);
 }
 
 // 동기화 설정 패널
