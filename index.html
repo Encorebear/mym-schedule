@@ -372,7 +372,7 @@
   .badge-viewer { background: rgba(100,116,139,0.2); color: var(--text3); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
 
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 </head>
 <body>
 
@@ -1851,8 +1851,8 @@ function onExportPeriodChange() {
   document.getElementById('export-year-wrap').style.display  = p === 'all'   ? 'none' : '';
 }
 
-function generateExcel() {
-  if (typeof XLSX === 'undefined') {
+async function generateExcel() {
+  if (typeof ExcelJS === 'undefined') {
     showToast('❌ 라이브러리 로딩 중... 잠시 후 다시 시도해주세요');
     return;
   }
@@ -1865,10 +1865,19 @@ function generateExcel() {
   const actorFilter = document.getElementById('export-actor').value;
   const staffFilter = document.getElementById('export-staff-name').value.trim().toLowerCase();
   const DOW = ['일','월','화','수','목','금','토'];
+  const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  // ── 기간 표시 문자열 ──
+  let periodStr = '';
+  if (period === 'month')     periodStr = year + '년 ' + MONTHS[month];
+  else if (period === 'year') periodStr = year + '년';
+  else                        periodStr = '전체 기간';
+  if (actorFilter !== 'all')  periodStr += ' · ' + actorFilter;
+  if (staffFilter)            periodStr += ' · ' + staffFilter;
 
   // ── 이벤트 필터링 ──
   let evts = state.events.filter(ev => {
-    if (ev.type === PRIVATE_TYPE) return false;                                      // 비공개 제외
+    if (ev.type === PRIVATE_TYPE) return false;
     const d = new Date(ev.date);
     if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
     if (period === 'year'  &&  d.getFullYear() !== year)                             return false;
@@ -1886,97 +1895,193 @@ function generateExcel() {
     return true;
   }).sort((a,b) => a.date !== b.date ? a.date.localeCompare(b.date) : (a.startTime||'').localeCompare(b.startTime||''));
 
-  const wb = XLSX.utils.book_new();
+  // ── 공통 스타일 ──
+  const THIN = { style: 'thin', color: { argb: 'FFB0BEC5' } };
+  const BORDER_ALL = { top: THIN, left: THIN, bottom: THIN, right: THIN };
+  const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+  const TITLE_FILL  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F2540' } };
+  const ROW_EVEN    = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F5FF' } };
 
-  // ══ Sheet 1: 전체 일정 (스텝 1인 1행) ══════════
-  const rows1 = [['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무시간(h)','메모']];
-  evts.forEach(ev => {
-    const d = new Date(ev.date);
-    const base = [ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-                  ev.startTime||'', ev.endTime||'', ev.location||''];
-    let hasStaff = false;
+  function applyHeader(row, ncols) {
+    row.height = 22;
+    row.eachCell({ includeEmpty: true }, function(cell) {
+      cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.fill      = HEADER_FILL;
+      cell.border    = BORDER_ALL;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+  }
+
+  function applyTitle(ws, title, sub, ncols) {
+    ws.addRow([title]);
+    ws.mergeCells(1, 1, 1, ncols);
+    var tc = ws.getCell(1, 1);
+    tc.font      = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+    tc.fill      = TITLE_FILL;
+    tc.alignment = { horizontal: 'center', vertical: 'middle' };
+    tc.border    = BORDER_ALL;
+    ws.getRow(1).height = 30;
+
+    ws.addRow([sub]);
+    ws.mergeCells(2, 1, 2, ncols);
+    var sc = ws.getCell(2, 1);
+    sc.font      = { size: 10, color: { argb: 'FFAECBEA' } };
+    sc.fill      = TITLE_FILL;
+    sc.alignment = { horizontal: 'center', vertical: 'middle' };
+    sc.border    = BORDER_ALL;
+    ws.getRow(2).height = 18;
+  }
+
+  function applyDataRow(row, rowIdx) {
+    row.height = 17;
+    var isEven = (rowIdx % 2 === 0);
+    row.eachCell({ includeEmpty: true }, function(cell) {
+      cell.border    = BORDER_ALL;
+      cell.alignment = { vertical: 'middle', wrapText: false };
+      if (isEven) cell.fill = ROW_EVEN;
+    });
+  }
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'MYM Schedule';
+  wb.created = new Date();
+
+  // ══ Sheet 1: 전체 일정 ══════════════════════════
+  var ws1 = wb.addWorksheet('전체일정', { views: [{ state: 'frozen', ySplit: 3 }] });
+  ws1.columns = [
+    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
+    { width: 8  }, { width: 8  }, { width: 16 }, { width: 12 }, { width: 12 },
+    { width: 8  }, { width: 8  }, { width: 11 }, { width: 22 }
+  ];
+  applyTitle(ws1, 'MYM 스케줄 — 전체일정', periodStr, 14);
+  var hdr1 = ws1.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무(h)','메모']);
+  applyHeader(hdr1, 14);
+  ws1.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 14 } };
+
+  var dataIdx1 = 0;
+  evts.forEach(function(ev) {
+    var d = new Date(ev.date);
+    var base = [ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+                ev.startTime||'', ev.endTime||'', ev.location||''];
+    var hasStaff = false;
     if (ev.staff) {
       try {
-        const obj = JSON.parse(ev.staff);
-        STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
-          const nm = typeof item === 'string' ? item : (item.name||'');
-          const st = typeof item === 'string' ? '' : (item.startTime||'');
-          const en = typeof item === 'string' ? '' : (item.endTime||'');
-          const hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
-          if (!nm) return;
-          rows1.push(base.concat([c, nm, st, en, hr, ev.memo||'']));
-          hasStaff = true;
-        }));
+        var obj = JSON.parse(ev.staff);
+        STAFF_CATS.forEach(function(c) {
+          (obj[c]||[]).forEach(function(item) {
+            var nm = typeof item === 'string' ? item : (item.name||'');
+            var st = typeof item === 'string' ? '' : (item.startTime||'');
+            var en = typeof item === 'string' ? '' : (item.endTime||'');
+            var hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
+            if (!nm) return;
+            var row = ws1.addRow(base.concat([c, nm, st, en, hr, ev.memo||'']));
+            applyDataRow(row, dataIdx1++);
+            hasStaff = true;
+          });
+        });
       } catch(e) {}
     }
-    if (!hasStaff) rows1.push(base.concat(['','','','','', ev.memo||'']));
+    if (!hasStaff) {
+      var row = ws1.addRow(base.concat(['','','','','', ev.memo||'']));
+      applyDataRow(row, dataIdx1++);
+    }
   });
-  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
-  ws1['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8},{wch:12},{wch:20}];
-  XLSX.utils.book_append_sheet(wb, ws1, '전체일정');
 
-  // ══ Sheet 2: 스텝 근무 내역 (1인 1행) ══════════
-  const rows2 = [['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝 이름','출근','퇴근','근무시간(h)']];
-  evts.forEach(ev => {
-    const d = new Date(ev.date);
+  // ══ Sheet 2: 스텝 근무 내역 ═════════════════════
+  var ws2 = wb.addWorksheet('스텝근무내역', { views: [{ state: 'frozen', ySplit: 3 }] });
+  ws2.columns = [
+    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
+    { width: 8  }, { width: 8  }, { width: 16 }, { width: 12 }, { width: 14 },
+    { width: 8  }, { width: 8  }, { width: 11 }
+  ];
+  applyTitle(ws2, 'MYM 스케줄 — 스텝 근무 내역', periodStr, 13);
+  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무(h)']);
+  applyHeader(hdr2, 13);
+  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 13 } };
+
+  var dataIdx2 = 0;
+  evts.forEach(function(ev) {
+    var d = new Date(ev.date);
     if (!ev.staff) return;
     try {
-      const obj = JSON.parse(ev.staff);
-      STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
-        const nm = typeof item === 'string' ? item : (item.name||'');
-        const st = typeof item === 'string' ? '' : (item.startTime||'');
-        const en = typeof item === 'string' ? '' : (item.endTime||'');
-        const hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
-        if (!nm) return;
-        if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
-        rows2.push([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-          ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, st, en, hr]);
-      }));
+      var obj = JSON.parse(ev.staff);
+      STAFF_CATS.forEach(function(c) {
+        (obj[c]||[]).forEach(function(item) {
+          var nm = typeof item === 'string' ? item : (item.name||'');
+          var st = typeof item === 'string' ? '' : (item.startTime||'');
+          var en = typeof item === 'string' ? '' : (item.endTime||'');
+          var hr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
+          if (!nm) return;
+          if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
+          var row = ws2.addRow([ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+            ev.startTime||'', ev.endTime||'', ev.location||'', c, nm, st, en, hr]);
+          applyDataRow(row, dataIdx2++);
+        });
+      });
     } catch(e) {}
   });
-  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
-  ws2['!cols'] = [{wch:12},{wch:5},{wch:8},{wch:8},{wch:25},{wch:8},{wch:8},{wch:15},{wch:12},{wch:15},{wch:8},{wch:8},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws2, '스텝근무내역');
 
-  // ══ Sheet 3: 스텝별 요약 (이름별 총 시간) ═══════
-  const summary = {};
-  evts.forEach(ev => {
+  // ══ Sheet 3: 스텝별 요약 ════════════════════════
+  var ws3 = wb.addWorksheet('스텝별요약', { views: [{ state: 'frozen', ySplit: 3 }] });
+  ws3.columns = [{ width: 16 }, { width: 14 }, { width: 14 }, { width: 14 }];
+  applyTitle(ws3, 'MYM 스케줄 — 스텝별 요약', periodStr, 4);
+  var hdr3 = ws3.addRow(['스텝 이름','카테고리','참여 일정 수','총 근무시간(h)']);
+  applyHeader(hdr3, 4);
+  ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 4 } };
+
+  var summary = {};
+  evts.forEach(function(ev) {
     if (!ev.staff) return;
     try {
-      const obj = JSON.parse(ev.staff);
-      STAFF_CATS.forEach(c => (obj[c]||[]).forEach(item => {
-        const nm = typeof item === 'string' ? item : (item.name||'');
-        const hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
-        if (!nm) return;
-        if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
-        const key = nm + '|' + c;
-        if (!summary[key]) summary[key] = {name:nm, cat:c, hours:0, cnt:0};
-        summary[key].hours += hr;
-        summary[key].cnt++;
-      }));
+      var obj = JSON.parse(ev.staff);
+      STAFF_CATS.forEach(function(c) {
+        (obj[c]||[]).forEach(function(item) {
+          var nm = typeof item === 'string' ? item : (item.name||'');
+          var hr = typeof item === 'string' ? 0 : (parseFloat(item.hours)||0);
+          if (!nm) return;
+          if (staffFilter && !nm.toLowerCase().includes(staffFilter)) return;
+          var key = nm + '|' + c;
+          if (!summary[key]) summary[key] = { name: nm, cat: c, hours: 0, cnt: 0 };
+          summary[key].hours += hr;
+          summary[key].cnt++;
+        });
+      });
     } catch(e) {}
   });
-  const rows3 = [['스텝 이름','카테고리','참여 일정 수','총 근무시간(h)']];
+
+  var dataIdx3 = 0;
   Object.values(summary)
-    .sort((a,b) => (b.hours - a.hours) || a.name.localeCompare(b.name))
-    .forEach(s => rows3.push([s.name, s.cat, s.cnt, s.hours||'']));
-  const ws3 = XLSX.utils.aoa_to_sheet(rows3);
-  ws3['!cols'] = [{wch:15},{wch:15},{wch:15},{wch:16}];
-  XLSX.utils.book_append_sheet(wb, ws3, '스텝별요약');
+    .sort(function(a, b) { return (b.hours - a.hours) || a.name.localeCompare(b.name); })
+    .forEach(function(s) {
+      var row = ws3.addRow([s.name, s.cat, s.cnt, s.hours || '']);
+      applyDataRow(row, dataIdx3++);
+    });
 
-  // 파일명
-  let fname = 'MYM스케줄';
-  if (actorFilter !== 'all') fname += '_' + actorFilter;
-  if (period === 'month')      fname += '_' + year + '년' + (month+1) + '월';
-  else if (period === 'year')  fname += '_' + year + '년';
-  else                         fname += '_전체';
-  if (staffFilter) fname += '_' + staffFilter;
+  // ── 파일명 ──
+  var fname = 'MYM스케줄';
+  if (actorFilter !== 'all')  fname += '_' + actorFilter;
+  if (period === 'month')     fname += '_' + year + '년' + (month + 1) + '월';
+  else if (period === 'year') fname += '_' + year + '년';
+  else                        fname += '_전체';
+  if (staffFilter)            fname += '_' + staffFilter;
   fname += '.xlsx';
 
-  XLSX.writeFile(wb, fname);
-  statusEl.textContent = '✅ ' + fname + ' 다운로드됨';
-  showToast('✅ 엑셀 다운로드 완료');
+  // ── 다운로드 ──
+  try {
+    var buffer = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = fname; a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    statusEl.textContent = '✅ ' + fname;
+    showToast('✅ 엑셀 다운로드 완료');
+  } catch(err) {
+    statusEl.textContent = '❌ 오류: ' + err.message;
+    showToast('❌ 엑셀 생성 실패');
+  }
 }
+
 
 // ═══════════════════════════════════════════════════
 //  INIT
