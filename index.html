@@ -1081,21 +1081,19 @@ function openEditSheet(id) {
 //  STAFF TAG UI
 // ═══════════════════════════════════════════════════
 const STAFF_CATS = ['헤어','메이크업','스타일리스트','매니저','MYM','기타'];
-let staffData = {}; // { 헤어: ['이름1'], 매니저: ['이름2'], ... }
+let staffData = {};
 
 function initStaffTags(existingStaff) {
-  // staff 필드: JSON string { 헤어:[...], ... } 또는 구버전 plain string
   staffData = {};
   STAFF_CATS.forEach(c => staffData[c] = []);
   if (existingStaff) {
     try {
       const parsed = JSON.parse(existingStaff);
-      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         STAFF_CATS.forEach(c => { staffData[c] = Array.isArray(parsed[c]) ? parsed[c] : []; });
       }
     } catch(e) {
-      // 구버전 plain text는 기타에 넣기
-      if (existingStaff.trim()) staffData['기타'] = [existingStaff];
+      if (existingStaff.trim()) staffData['기타'] = [existingStaff.trim()];
     }
   }
   renderStaffTags();
@@ -1104,37 +1102,40 @@ function initStaffTags(existingStaff) {
 function renderStaffTags() {
   const wrap = document.getElementById('staff-tags-wrap');
   if (!wrap) return;
-  wrap.innerHTML = STAFF_CATS.map(cat => `
-    <div class="staff-category">
+  // 인덱스 기반 ID 사용 (한글 ID 호환성 문제 방지)
+  wrap.innerHTML = STAFF_CATS.map((cat, ci) => {
+    const tags = (staffData[cat]||[]).map((name, ti) =>
+      `<div class="staff-tag">${name}<button type="button" class="staff-tag-del" onclick="removeStaffTag(${ci},${ti})">×</button></div>`
+    ).join('');
+    return `<div class="staff-category">
       <div class="staff-cat-label">${cat}</div>
-      <div class="staff-tags-row" id="staff-row-${cat}">
-        ${(staffData[cat]||[]).map((name,i)=>`
-          <div class="staff-tag">${name}
-            <button class="staff-tag-del" onclick="removeStaffTag('${cat}',${i})">×</button>
-          </div>`).join('')}
+      <div class="staff-tags-row">
+        ${tags}
         <div class="staff-add-row">
-          <input class="staff-add-input" id="staff-input-${cat}" placeholder="이름 입력"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffTag('${cat}');}">
-          <button class="staff-add-btn" onclick="addStaffTag('${cat}')">+</button>
+          <input type="text" class="staff-add-input" id="sinput-${ci}" placeholder="이름 입력"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffTag(${ci});}">
+          <button type="button" class="staff-add-btn" onclick="addStaffTag(${ci})">+</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   syncStaffHidden();
 }
 
-function addStaffTag(cat) {
-  const input = document.getElementById('staff-input-'+cat);
+function addStaffTag(ci) {
+  const input = document.getElementById('sinput-' + ci);
   const name = input ? input.value.trim() : '';
   if (!name) return;
+  const cat = STAFF_CATS[ci];
   if (!staffData[cat]) staffData[cat] = [];
   staffData[cat].push(name);
   renderStaffTags();
-  // 포커스 유지
-  setTimeout(() => { const el = document.getElementById('staff-input-'+cat); if(el) el.focus(); }, 50);
+  setTimeout(() => { const el = document.getElementById('sinput-' + ci); if (el) el.focus(); }, 30);
 }
 
-function removeStaffTag(cat, idx) {
-  if (staffData[cat]) staffData[cat].splice(idx, 1);
+function removeStaffTag(ci, ti) {
+  const cat = STAFF_CATS[ci];
+  if (staffData[cat]) staffData[cat].splice(ti, 1);
   renderStaffTags();
 }
 
@@ -1147,9 +1148,10 @@ function formatStaffDisplay(staffJson) {
   if (!staffJson) return '';
   try {
     const obj = JSON.parse(staffJson);
+    if (typeof obj !== 'object' || Array.isArray(obj)) return `<div>${staffJson}</div>`;
     return STAFF_CATS
       .filter(c => obj[c] && obj[c].length)
-      .map(c => `<div style="margin-bottom:2px;"><span style="color:var(--text3);font-size:10px;">${c}</span> ${obj[c].join(', ')}</div>`)
+      .map(c => `<div><span style="color:var(--text3);font-size:10px;">${c}</span> ${obj[c].join(', ')}</div>`)
       .join('');
   } catch(e) {
     return staffJson ? `<div>${staffJson}</div>` : '';
