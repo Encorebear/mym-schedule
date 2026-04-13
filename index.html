@@ -313,6 +313,30 @@
   .sync-status.ok { color: var(--success); }
   .sync-status.err { color: var(--danger); }
 
+  /* ── STAFF TAGS ── */
+  .staff-category { background: var(--bg3); border-radius: 10px; padding: 8px 10px; }
+  .staff-cat-label { font-size: 11px; font-weight: 700; color: var(--text3); margin-bottom: 6px; }
+  .staff-tags-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .staff-tag {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--bg4); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 8px 3px 10px; font-size: 12px;
+  }
+  .staff-tag-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+  .staff-add-row { display: flex; gap: 5px; margin-top: 4px; }
+  .staff-add-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 12px;
+    padding: 5px 9px; font-family: inherit;
+  }
+  .staff-add-input:focus { outline: none; border-color: var(--accent); }
+  .staff-add-btn {
+    background: var(--bg4); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text2); font-size: 18px; font-weight: 300;
+    cursor: pointer; padding: 3px 10px; line-height: 1;
+  }
+  .staff-add-btn:active { background: var(--accent); color: white; }
+
   /* ── TOAST ── */
   .toast {
     position: fixed; bottom: 90px; left: 50%;
@@ -479,7 +503,8 @@
       </div>
       <div class="form-section">
         <label class="form-label">동행 / 스텝</label>
-        <input type="text" class="form-input" id="form-staff" placeholder="예: 매니저 김OO, 스타일리스트 이OO (선택)">
+        <div id="staff-tags-wrap" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <input type="hidden" id="form-staff">
       </div>
       <div class="form-section">
         <label class="form-label">메모</label>
@@ -636,6 +661,13 @@ async function loadUsersFromServer() {
 function getUser(id) { return state.users.find(u => u.id === id); }
 function isAdmin() { return state.currentUser && state.currentUser.role === 'admin'; }
 function canEdit() { return state.currentUser && state.currentUser.canEdit; }
+// 비공개 일정: 작성자 본인 또는 관리자만 내용 열람 가능
+function isHidden(ev) {
+  if (ev.type !== PRIVATE_TYPE) return false;
+  if (isAdmin()) return false;
+  if (ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id) return false;
+  return true;
+}
 
 // ═══════════════════════════════════════════════════
 //  AUTH
@@ -827,7 +859,7 @@ function renderCalendar() {
     let dots = '';
     events.slice(0, 3).forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
-      const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
+      const isPrivate = isHidden(ev);
       const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
       const dotBg = isPrivate ? 'rgba(100,116,139,0.6)' : (ac.bg||'#3b82f6');
       dots += `<div class="event-dot" style="background:${dotBg}">${label}</div>`;
@@ -865,7 +897,7 @@ function renderList() {
     groups[ds].forEach(ev => {
       const ac=ACTORS[ev.actor]||{};
       const t=ev.startTime?(ev.endTime?`${ev.startTime}~${ev.endTime}`:ev.startTime):'';
-      const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
+      const isPrivate = isHidden(ev);
       html+=`<div class="list-event-card" onclick="openDaySheet('${ev.date}')">
         <div class="list-event-bar" style="background:${isPrivate?'#64748b':ac.color||'#3b82f6'}"></div>
         <div class="list-event-content">
@@ -935,15 +967,18 @@ function renderDayBody(ds) {
     const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
 
     if (isPrivate) {
-      // 비공개: 담당자에게는 존재만 알림, 세부내용 숨김
+      // 비공개: 작성자·관리자에게만 세부내용 표시
       html+=`<div class="event-card" style="border-left-color:#64748b;background:var(--bg3);">
         <div class="event-card-actor" style="color:#64748b;">
           <span style="width:7px;height:7px;border-radius:50%;background:#64748b;display:inline-block;"></span> ${ev.actor}
         </div>
         <div class="event-card-title" style="color:var(--text3);">🔒 비공개 일정</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">관리자만 내용을 열람할 수 있습니다</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">작성자 및 관리자만 열람할 수 있습니다</div>
       </div>`;
     } else {
+      const isCreator = ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id;
+      const showEdit = userCanEdit || isCreator;
+      const staffHtml = formatStaffDisplay(ev.staff);
       html+=`<div class="event-card" style="border-left-color:${ac.color||'#3b82f6'}">
         <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
           <span style="width:7px;height:7px;border-radius:50%;background:${ac.color};display:inline-block;"></span> ${ev.actor}
@@ -954,9 +989,9 @@ function renderDayBody(ds) {
           ${ev.location?`<span>📍 ${ev.location}</span>`:''}
           ${ev.type?`<span>${EVENT_TYPES[ev.type]||''} ${ev.type}</span>`:''}
         </div>
-        ${ev.staff?`<div style="margin-top:5px;font-size:12px;color:var(--text2);line-height:1.5;">👥 ${ev.staff}</div>`:''}
+        ${staffHtml?`<div style="margin-top:6px;font-size:12px;color:var(--text2);line-height:1.8;">👥 ${staffHtml}</div>`:''}
         ${ev.memo?`<div style="margin-top:5px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
-        ${userCanEdit?`<div class="event-card-actions">
+        ${showEdit?`<div class="event-card-actions">
           <button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>
           <button class="btn-delete" onclick="deleteEvent('${ev.id}','${ds}')">🗑 삭제</button>
         </div>`:''}
@@ -1016,6 +1051,7 @@ function openAddSheet(ds) {
   else if (state.selectedActor!=='all') selectFormActor(state.selectedActor);
 
   document.getElementById('form-date').value=ds||dateKey(new Date());
+  initStaffTags('');
   showSheet('form-sheet');
 }
 
@@ -1036,9 +1072,88 @@ function openEditSheet(id) {
   document.getElementById('form-start-time').value=ev.startTime||'';
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
-  document.getElementById('form-staff').value=ev.staff||'';
   document.getElementById('form-memo').value=ev.memo||'';
+  initStaffTags(ev.staff||'');
   showSheet('form-sheet');
+}
+
+// ═══════════════════════════════════════════════════
+//  STAFF TAG UI
+// ═══════════════════════════════════════════════════
+const STAFF_CATS = ['헤어','메이크업','스타일리스트','매니저','MYM','기타'];
+let staffData = {}; // { 헤어: ['이름1'], 매니저: ['이름2'], ... }
+
+function initStaffTags(existingStaff) {
+  // staff 필드: JSON string { 헤어:[...], ... } 또는 구버전 plain string
+  staffData = {};
+  STAFF_CATS.forEach(c => staffData[c] = []);
+  if (existingStaff) {
+    try {
+      const parsed = JSON.parse(existingStaff);
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        STAFF_CATS.forEach(c => { staffData[c] = Array.isArray(parsed[c]) ? parsed[c] : []; });
+      }
+    } catch(e) {
+      // 구버전 plain text는 기타에 넣기
+      if (existingStaff.trim()) staffData['기타'] = [existingStaff];
+    }
+  }
+  renderStaffTags();
+}
+
+function renderStaffTags() {
+  const wrap = document.getElementById('staff-tags-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = STAFF_CATS.map(cat => `
+    <div class="staff-category">
+      <div class="staff-cat-label">${cat}</div>
+      <div class="staff-tags-row" id="staff-row-${cat}">
+        ${(staffData[cat]||[]).map((name,i)=>`
+          <div class="staff-tag">${name}
+            <button class="staff-tag-del" onclick="removeStaffTag('${cat}',${i})">×</button>
+          </div>`).join('')}
+        <div class="staff-add-row">
+          <input class="staff-add-input" id="staff-input-${cat}" placeholder="이름 입력"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addStaffTag('${cat}');}">
+          <button class="staff-add-btn" onclick="addStaffTag('${cat}')">+</button>
+        </div>
+      </div>
+    </div>`).join('');
+  syncStaffHidden();
+}
+
+function addStaffTag(cat) {
+  const input = document.getElementById('staff-input-'+cat);
+  const name = input ? input.value.trim() : '';
+  if (!name) return;
+  if (!staffData[cat]) staffData[cat] = [];
+  staffData[cat].push(name);
+  renderStaffTags();
+  // 포커스 유지
+  setTimeout(() => { const el = document.getElementById('staff-input-'+cat); if(el) el.focus(); }, 50);
+}
+
+function removeStaffTag(cat, idx) {
+  if (staffData[cat]) staffData[cat].splice(idx, 1);
+  renderStaffTags();
+}
+
+function syncStaffHidden() {
+  const hidden = document.getElementById('form-staff');
+  if (hidden) hidden.value = JSON.stringify(staffData);
+}
+
+function formatStaffDisplay(staffJson) {
+  if (!staffJson) return '';
+  try {
+    const obj = JSON.parse(staffJson);
+    return STAFF_CATS
+      .filter(c => obj[c] && obj[c].length)
+      .map(c => `<div style="margin-bottom:2px;"><span style="color:var(--text3);font-size:10px;">${c}</span> ${obj[c].join(', ')}</div>`)
+      .join('');
+  } catch(e) {
+    return staffJson ? `<div>${staffJson}</div>` : '';
+  }
 }
 
 function selectFormActor(actor) {
@@ -1066,14 +1181,17 @@ function submitEventForm(e) {
   if (!type)  { showToast('일정 유형을 선택해주세요'); return; }
   if (!title) { showToast('제목을 입력해주세요'); return; }
 
+  syncStaffHidden();
+  const existing = editingId ? state.events.find(e=>e.id===editingId) : null;
   const ev={
     id: editingId||'ev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
     actor, date, type, title,
     startTime:document.getElementById('form-start-time').value,
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
-    staff:document.getElementById('form-staff').value.trim(),
+    staff:document.getElementById('form-staff').value,
     memo:document.getElementById('form-memo').value.trim(),
+    createdBy: existing ? (existing.createdBy || state.currentUser.id) : state.currentUser.id,
     updatedAt:new Date().toISOString()
   };
 
