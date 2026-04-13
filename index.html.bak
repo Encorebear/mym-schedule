@@ -135,7 +135,7 @@
 
   /* ── WEEKDAY ── */
   .weekday-header { flex-shrink: 0; display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px 4px 3px; gap: 2px; }
-  .weekday-label { text-align: center; font-size: 11px; font-weight: 700; color: var(--text2); padding: 2px 0; }
+  .weekday-label { text-align: center; font-size: 11px; font-weight: 600; color: var(--text3); padding: 2px 0; }
 
   /* ── CALENDAR ── */
   #calendar-view {
@@ -157,7 +157,7 @@
   .cal-day.other-month { opacity: 0.25; }
   .cal-day.today { border-color: var(--accent); }
   .day-num {
-    font-size: 11px; font-weight: 700; color: var(--text);
+    font-size: 11px; font-weight: 600; color: var(--text2);
     display: flex; align-items: center; justify-content: center;
     width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   }
@@ -167,8 +167,8 @@
     flex: 1; min-height: 0; overflow: hidden;
   }
   .event-dot {
-    flex-shrink: 0; height: 15px; border-radius: 3px; font-size: 10px; font-weight: 700;
-    padding: 0 3px; line-height: 15px; white-space: nowrap;
+    flex-shrink: 0; height: 13px; border-radius: 3px; font-size: 8px; font-weight: 600;
+    padding: 0 3px; line-height: 13px; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   }
   .more-count { font-size: 8px; color: var(--text3); padding: 0 2px; flex-shrink: 0; }
@@ -441,8 +441,8 @@
     <div class="weekday-label">월</div><div class="weekday-label">화</div>
     <div class="weekday-label">수</div><div class="weekday-label">목</div>
     <div class="weekday-label">금</div>
-    <div class="weekday-label" style="color:#a78bfa;font-weight:700;">토</div>
-    <div class="weekday-label" style="color:#f87171;font-weight:700;">일</div>
+    <div class="weekday-label" style="color:var(--min)">토</div>
+    <div class="weekday-label" style="color:var(--junseo)">일</div>
   </div>
 
   <!-- CALENDAR / LIST -->
@@ -591,12 +591,12 @@
 //  CONSTANTS
 // ═══════════════════════════════════════════════════
 const ACTORS = {
-  'LMH': { color: '#60a5fa', bg: 'rgba(96,165,250,0.85)',  textColor: 'white' },
-  'LSJ': { color: '#f472b6', bg: 'rgba(244,114,182,0.85)', textColor: 'white' },
-  'KM':  { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)', textColor: 'white' },
-  'KMJ': { color: '#d97706', bg: 'rgba(251,191,36,0.85)',  textColor: '#1a1200' },
-  'LSH': { color: '#10b981', bg: 'rgba(52,211,153,0.82)',  textColor: '#082d1f' },
-  'PJS': { color: '#f87171', bg: 'rgba(248,113,113,0.85)', textColor: 'white' }
+  'LMH': { color: '#60a5fa', bg: 'rgba(96,165,250,0.85)' },
+  'LSJ': { color: '#f472b6', bg: 'rgba(244,114,182,0.85)' },
+  'KM':   { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)' },
+  'KMJ': { color: '#fbbf24', bg: 'rgba(251,191,36,0.85)' },
+  'LSH': { color: '#34d399', bg: 'rgba(52,211,153,0.85)' },
+  'PJS': { color: '#f87171', bg: 'rgba(248,113,113,0.85)' }
 };
 const ACTOR_LIST = Object.keys(ACTORS);
 const EVENT_TYPES = { '촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','광고':'📢','기타':'📌','비공개':'🔒' };
@@ -887,10 +887,9 @@ function renderCalendar() {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
       const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
-      const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
-      const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
-      const dotShadow = (isPrivate || ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
-      dots += `<div class="event-dot" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">${label}</div>`;
+      const dotBg = isPrivate ? 'rgba(100,116,139,0.4)' : (ac.bg||'rgba(59,130,246,0.15)');
+      const dotColor = isPrivate ? '#94a3b8' : (ac.color||'#3b82f6');
+      dots += `<div class="event-dot" style="background:${dotBg};color:${dotColor};">${label}</div>`;
     });
     html += `<div class="${cls}" onclick="openDaySheet('${key}')">
       <div class="day-num" style="${dayColor}">${date.getDate()}</div>
