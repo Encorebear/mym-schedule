@@ -435,8 +435,9 @@
           <button type="button" class="type-select-btn" data-type="인터뷰" onclick="selectFormType('인터뷰')">🎤<br>인터뷰</button>
           <button type="button" class="type-select-btn" data-type="이동" onclick="selectFormType('이동')">✈️<br>이동</button>
           <button type="button" class="type-select-btn" data-type="홍보" onclick="selectFormType('홍보')">📸<br>홍보</button>
-          <button type="button" class="type-select-btn" data-type="휴식" onclick="selectFormType('휴식')">😴<br>휴식</button>
+          <button type="button" class="type-select-btn" data-type="광고" onclick="selectFormType('광고')">📢<br>광고</button>
           <button type="button" class="type-select-btn" data-type="기타" onclick="selectFormType('기타')">📌<br>기타</button>
+          <button type="button" class="type-select-btn" id="type-btn-private" data-type="비공개" onclick="selectFormType('비공개')" style="grid-column:span 4;border-color:rgba(239,68,68,0.3);color:#ef4444;">🔒 비공개 &nbsp;<span style="font-size:10px;color:var(--text3);font-weight:400;">관리자만 세부내용 열람</span></button>
         </div>
         <input type="hidden" id="form-type" required>
       </div>
@@ -533,7 +534,8 @@ const ACTORS = {
   'PJS': { color: '#f87171', bg: 'rgba(248,113,113,0.85)' }
 };
 const ACTOR_LIST = Object.keys(ACTORS);
-const EVENT_TYPES = { '촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','휴식':'😴','기타':'📌' };
+const EVENT_TYPES = { '촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','광고':'📢','기타':'📌','비공개':'🔒' };
+const PRIVATE_TYPE = '비공개'; // 관리자만 세부 내용 열람 가능
 
 const STORAGE_KEY   = 'mym_events_v1';
 const USERS_KEY     = 'mym_users_v1';
@@ -765,7 +767,10 @@ function renderCalendar() {
     let dots = '';
     events.slice(0, 3).forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
-      dots += `<div class="event-dot" style="background:${ac.bg||'#3b82f6'}">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>`;
+      const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
+      const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
+      const dotBg = isPrivate ? 'rgba(100,116,139,0.6)' : (ac.bg||'#3b82f6');
+      dots += `<div class="event-dot" style="background:${dotBg}">${label}</div>`;
     });
     if (events.length > 3) dots += `<div class="more-count">+${events.length-3}개</div>`;
     html += `<div class="${cls}" onclick="openDaySheet('${key}')">
@@ -800,11 +805,12 @@ function renderList() {
     groups[ds].forEach(ev => {
       const ac=ACTORS[ev.actor]||{};
       const t=ev.startTime?(ev.endTime?`${ev.startTime}~${ev.endTime}`:ev.startTime):'';
+      const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
       html+=`<div class="list-event-card" onclick="openDaySheet('${ev.date}')">
-        <div class="list-event-bar" style="background:${ac.color||'#3b82f6'}"></div>
+        <div class="list-event-bar" style="background:${isPrivate?'#64748b':ac.color||'#3b82f6'}"></div>
         <div class="list-event-content">
-          <div class="list-event-title">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>
-          <div class="list-event-meta">${ev.actor}${t?' · '+t:''}${ev.location?' · 📍'+ev.location:''}</div>
+          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`${EVENT_TYPES[ev.type]||''} ${ev.title}`}</div>
+          <div class="list-event-meta">${isPrivate?ev.actor:`${ev.actor}${t?' · '+t:''}${ev.location?' · 📍'+ev.location:''}`}</div>
         </div>
       </div>`;
     });
@@ -865,24 +871,36 @@ function renderDayBody(ds) {
   events.forEach(ev => {
     const ac=ACTORS[ev.actor]||{};
     const t=ev.startTime?(ev.endTime?`${ev.startTime} ~ ${ev.endTime}`:ev.startTime):'';
-    // Can this user edit this event?
     const userCanEdit = canEdit() && (isAdmin() || (state.currentUser.actors||[]).includes(ev.actor));
-    html+=`<div class="event-card" style="border-left-color:${ac.color||'#3b82f6'}">
-      <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
-        <span style="width:7px;height:7px;border-radius:50%;background:${ac.color};display:inline-block;"></span> ${ev.actor}
-      </div>
-      <div class="event-card-title">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>
-      <div class="event-card-meta">
-        ${t?`<span>🕐 ${t}</span>`:''}
-        ${ev.location?`<span>📍 ${ev.location}</span>`:''}
-        ${ev.type?`<span>${EVENT_TYPES[ev.type]||''} ${ev.type}</span>`:''}
-      </div>
-      ${ev.memo?`<div style="margin-top:6px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
-      ${userCanEdit?`<div class="event-card-actions">
-        <button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>
-        <button class="btn-delete" onclick="deleteEvent('${ev.id}','${ds}')">🗑 삭제</button>
-      </div>`:''}
-    </div>`;
+    const isPrivate = ev.type === PRIVATE_TYPE && !isAdmin();
+
+    if (isPrivate) {
+      // 비공개: 담당자에게는 존재만 알림, 세부내용 숨김
+      html+=`<div class="event-card" style="border-left-color:#64748b;background:var(--bg3);">
+        <div class="event-card-actor" style="color:#64748b;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#64748b;display:inline-block;"></span> ${ev.actor}
+        </div>
+        <div class="event-card-title" style="color:var(--text3);">🔒 비공개 일정</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">관리자만 내용을 열람할 수 있습니다</div>
+      </div>`;
+    } else {
+      html+=`<div class="event-card" style="border-left-color:${ac.color||'#3b82f6'}">
+        <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${ac.color};display:inline-block;"></span> ${ev.actor}
+        </div>
+        <div class="event-card-title">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>
+        <div class="event-card-meta">
+          ${t?`<span>🕐 ${t}</span>`:''}
+          ${ev.location?`<span>📍 ${ev.location}</span>`:''}
+          ${ev.type?`<span>${EVENT_TYPES[ev.type]||''} ${ev.type}</span>`:''}
+        </div>
+        ${ev.memo?`<div style="margin-top:6px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
+        ${userCanEdit?`<div class="event-card-actions">
+          <button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>
+          <button class="btn-delete" onclick="deleteEvent('${ev.id}','${ds}')">🗑 삭제</button>
+        </div>`:''}
+      </div>`;
+    }
   });
   if (canEdit()) {
     html+=`<button class="btn-submit" style="font-size:13px;padding:10px;margin-top:8px;"
