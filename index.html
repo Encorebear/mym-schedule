@@ -1188,8 +1188,8 @@ function renderAdminPanel() {
         <div class="user-row-role">${u.label||u.id}${u.actors&&u.actors.length?' · '+u.actors.join(', '):''}${u.canEdit?'':' · 읽기전용'}</div>
       </div>
       <div class="user-row-actions">
-        ${!isSelf?`<button class="btn-small" onclick="adminEditUser('${u.id}')">수정</button>
-        <button class="btn-small danger" onclick="adminDeleteUser('${u.id}')">삭제</button>`:''}
+        <button class="btn-small" onclick="adminEditUser('${u.id}')">수정</button>
+        ${!isSelf?`<button class="btn-small danger" onclick="adminDeleteUser('${u.id}')">삭제</button>`:''}
       </div>
       ${editingUserId===u.id?renderEditForm(u):''}
     </div>`;
