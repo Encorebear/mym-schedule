@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mym-schedule-v6';
+const CACHE_NAME = 'mym-schedule-v7';
 const ASSETS = [
   '/mym-schedule/',
   '/mym-schedule/index.html',
@@ -14,16 +14,21 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
+// activate: 구 캐시 삭제 후 열린 탭 전부 강제 새로고침
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.matchAll({ includeUncontrolled: true, type: 'window' }))
+      .then(clients => {
+        clients.forEach(client => client.navigate(client.url));
+      })
   );
   self.clients.claim();
 });
 
-// 페이지에서 SKIP_WAITING 메시지 받으면 즉시 활성화
 self.addEventListener('message', e => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
