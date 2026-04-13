@@ -349,6 +349,10 @@
       <input type="password" class="login-input" id="login-pw" placeholder="비밀번호 입력" autocomplete="current-password"
         onkeydown="if(event.key==='Enter')doLogin()">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-bottom:12px;cursor:pointer;">
+      <input type="checkbox" id="login-remember" checked style="accent-color:var(--accent);width:16px;height:16px;">
+      로그인 유지
+    </label>
     <button class="login-btn" onclick="doLogin()">로그인</button>
     <div class="login-error" id="login-error"></div>
   </div>
@@ -609,6 +613,7 @@ function canEdit() { return state.currentUser && state.currentUser.canEdit; }
 function doLogin() {
   const id = document.getElementById('login-id').value.trim();
   const pw = document.getElementById('login-pw').value;
+  const remember = document.getElementById('login-remember').checked;
   const errEl = document.getElementById('login-error');
 
   if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력해주세요'; return; }
@@ -617,13 +622,17 @@ function doLogin() {
   if (!user) { errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다'; return; }
 
   state.currentUser = user;
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  // 로그인 유지 체크 시 localStorage, 아니면 sessionStorage
+  const store = remember ? localStorage : sessionStorage;
+  store.setItem(SESSION_KEY, JSON.stringify({ id: user.id, remember }));
+  if (!remember) localStorage.removeItem(SESSION_KEY);
   errEl.textContent = '';
   startApp();
 }
 
 function logout() {
   state.currentUser = null;
+  localStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(SESSION_KEY);
   closeAllSheets();
   document.getElementById('main-app').style.display = 'none';
@@ -633,8 +642,10 @@ function logout() {
 }
 
 function tryAutoLogin() {
+  // localStorage 먼저 확인 (로그인 유지), 없으면 sessionStorage
   try {
-    const s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
+    let s = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (!s) s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
     if (s && s.id) {
       const fresh = getUser(s.id);
       if (fresh) { state.currentUser = fresh; return true; }
