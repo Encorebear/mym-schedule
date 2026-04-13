@@ -328,6 +328,44 @@
   .badge-admin { background: rgba(245,158,11,0.2); color: var(--warn); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
   .badge-actor { background: rgba(59,130,246,0.15); color: var(--accent); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
   .badge-viewer { background: rgba(100,116,139,0.2); color: var(--text3); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
+
+  /* ── QUICK DASHBOARD (위젯 대용) ── */
+  #quick-dash {
+    display: none; position: fixed; inset: 0; z-index: 50;
+    background: var(--bg); overflow-y: auto;
+    padding: 0 0 80px; -webkit-overflow-scrolling: touch;
+  }
+  .qd-header {
+    background: rgba(15,17,23,0.95); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .qd-title { font-size: 16px; font-weight: 700; }
+  .qd-title span { color: var(--accent); }
+  .qd-date { font-size: 12px; color: var(--text3); }
+  .qd-section { padding: 12px 16px; }
+  .qd-section-title {
+    font-size: 11px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+  }
+  .qd-event {
+    background: var(--bg2); border-radius: 10px; border: 1px solid var(--border);
+    padding: 10px 12px; margin-bottom: 6px;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .qd-bar { width: 3px; border-radius: 2px; min-height: 32px; align-self: stretch; }
+  .qd-content { flex: 1; min-width: 0; }
+  .qd-event-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .qd-event-meta { font-size: 11px; color: var(--text3); }
+  .qd-empty { color: var(--text3); font-size: 12px; padding: 8px 0; }
+  .qd-enter-btn {
+    display: block; width: calc(100% - 32px); margin: 16px auto;
+    padding: 14px; background: var(--accent); border: none;
+    border-radius: 10px; color: white; font-size: 15px;
+    font-weight: 700; cursor: pointer;
+  }
+  .qd-enter-btn:active { opacity: 0.85; }
 </style>
 </head>
 <body>
@@ -357,6 +395,25 @@
     <div class="login-error" id="login-error"></div>
   </div>
   <div class="login-version">MYM Schedule v1.0</div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!--  QUICK DASHBOARD (위젯 대용)               -->
+<!-- ══════════════════════════════════════════ -->
+<div id="quick-dash">
+  <div class="qd-header">
+    <div class="qd-title">MYM <span>스케줄</span></div>
+    <div class="qd-date" id="qd-date"></div>
+  </div>
+  <div class="qd-section">
+    <div class="qd-section-title">📌 오늘</div>
+    <div id="qd-today"></div>
+  </div>
+  <div class="qd-section">
+    <div class="qd-section-title">📅 내일</div>
+    <div id="qd-tomorrow"></div>
+  </div>
+  <button class="qd-enter-btn" id="qd-enter-btn" onclick="enterFullApp()">전체 캘린더 열기 →</button>
 </div>
 
 <!-- ══════════════════════════════════════════ -->
@@ -1375,9 +1432,103 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// ═══════════════════════════════════════════════════
+//  QUICK DASHBOARD (위젯 대용)
+// ═══════════════════════════════════════════════════
+function showQuickDash() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('quick-dash').style.display = 'block';
+
+  const now = new Date();
+  const DOW = ['일','월','화','수','목','금','토'];
+  document.getElementById('qd-date').textContent =
+    `${now.getFullYear()}. ${now.getMonth()+1}. ${now.getDate()} (${DOW[now.getDay()]})`;
+
+  const todayKey = dateKey(now);
+  const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+  const tmrKey = dateKey(tmr);
+
+  // 먼저 로컬 데이터로 렌더
+  renderQuickEvents('qd-today', todayKey);
+  renderQuickEvents('qd-tomorrow', tmrKey);
+
+  // 서버에서 최신 데이터 가져와서 다시 렌더
+  if (state.apiUrl) {
+    fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now())
+      .then(r => r.text()).then(t => {
+        const d = JSON.parse(t);
+        if (Array.isArray(d.events) && d.events.length > 0) {
+          state.events = d.events;
+          saveEvents();
+          renderQuickEvents('qd-today', todayKey);
+          renderQuickEvents('qd-tomorrow', tmrKey);
+        }
+      }).catch(() => {});
+  }
+
+  // 버튼 텍스트
+  document.getElementById('qd-enter-btn').textContent =
+    state.currentUser ? '전체 캘린더 열기 →' : '로그인 후 캘린더 열기 →';
+}
+
+function renderQuickEvents(containerId, dateStr) {
+  const container = document.getElementById(containerId);
+  const user = state.currentUser;
+
+  // 권한에 따라 필터
+  let visibleActors = ACTOR_LIST;
+  if (user && user.role !== 'admin' && user.actors && user.actors.length > 0) {
+    visibleActors = user.actors;
+  }
+
+  const events = state.events
+    .filter(e => e.date === dateStr && visibleActors.includes(e.actor))
+    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
+  if (!events.length) {
+    container.innerHTML = '<div class="qd-empty">일정 없음</div>';
+    return;
+  }
+
+  container.innerHTML = events.map(ev => {
+    const ac = ACTORS[ev.actor] || {};
+    const isPrivate = ev.type === PRIVATE_TYPE && (!user || user.role !== 'admin');
+    const emoji = isPrivate ? '🔒' : (EVENT_TYPES[ev.type] || '');
+    const title = isPrivate ? '비공개 일정' : ev.title;
+    const time = ev.startTime ? (ev.endTime ? `${ev.startTime}~${ev.endTime}` : ev.startTime) : '';
+    const meta = isPrivate ? ev.actor : `${ev.actor}${time ? ' · ' + time : ''}${ev.location ? ' · 📍' + ev.location : ''}`;
+    const barColor = isPrivate ? '#64748b' : (ac.color || '#3b82f6');
+
+    return `<div class="qd-event">
+      <div class="qd-bar" style="background:${barColor}"></div>
+      <div class="qd-content">
+        <div class="qd-event-title">${emoji} ${title}</div>
+        <div class="qd-event-meta">${meta}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function enterFullApp() {
+  document.getElementById('quick-dash').style.display = 'none';
+  if (state.currentUser) {
+    startApp();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
 loadAll();
-if (tryAutoLogin()) startApp();
-else document.getElementById('login-screen').style.display='flex';
+if (tryAutoLogin()) {
+  // 로그인 유지 상태 → 바로 퀵대시보드 표시
+  showQuickDash();
+} else {
+  document.getElementById('login-screen').style.display='flex';
+}
 
 // Enter key on login
 document.getElementById('login-pw').addEventListener('keydown', e => {
