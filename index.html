@@ -525,12 +525,12 @@
 //  CONSTANTS
 // ═══════════════════════════════════════════════════
 const ACTORS = {
-  '이민호': { color: '#60a5fa', bg: 'rgba(96,165,250,0.85)' },
-  '임수정': { color: '#f472b6', bg: 'rgba(244,114,182,0.85)' },
-  '김민':   { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)' },
-  '강민지': { color: '#fbbf24', bg: 'rgba(251,191,36,0.85)' },
-  '이서현': { color: '#34d399', bg: 'rgba(52,211,153,0.85)' },
-  '박준서': { color: '#f87171', bg: 'rgba(248,113,113,0.85)' }
+  'LMH': { color: '#60a5fa', bg: 'rgba(96,165,250,0.85)' },
+  'LSJ': { color: '#f472b6', bg: 'rgba(244,114,182,0.85)' },
+  'KM':   { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)' },
+  'KMJ': { color: '#fbbf24', bg: 'rgba(251,191,36,0.85)' },
+  'LSH': { color: '#34d399', bg: 'rgba(52,211,153,0.85)' },
+  'PJS': { color: '#f87171', bg: 'rgba(248,113,113,0.85)' }
 };
 const ACTOR_LIST = Object.keys(ACTORS);
 const EVENT_TYPES = { '촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','휴식':'😴','기타':'📌' };
@@ -546,12 +546,12 @@ const SESSION_KEY   = 'mym_session_v1';
 // canEdit: bool
 const DEFAULT_USERS = [
   { id:'admin',   pw:'mym2024', role:'admin',  actors:[], canEdit:true,  label:'관리자' },
-  { id:'minho',   pw:'minho1',  role:'actor',  actors:['이민호'], canEdit:true,  label:'이민호 담당' },
-  { id:'sujeong', pw:'sj1234',  role:'actor',  actors:['임수정'], canEdit:true,  label:'임수정 담당' },
-  { id:'min',     pw:'min123',  role:'actor',  actors:['김민'],   canEdit:true,  label:'김민 담당' },
-  { id:'minji',   pw:'mj1234',  role:'actor',  actors:['강민지'], canEdit:true,  label:'강민지 담당' },
-  { id:'seohyun', pw:'sh1234',  role:'actor',  actors:['이서현'], canEdit:true,  label:'이서현 담당' },
-  { id:'junseo',  pw:'js1234',  role:'actor',  actors:['박준서'], canEdit:true,  label:'박준서 담당' }
+  { id:'minho',   pw:'minho1',  role:'actor',  actors:['LMH'], canEdit:true,  label:'LMH 담당' },
+  { id:'sujeong', pw:'sj1234',  role:'actor',  actors:['LSJ'], canEdit:true,  label:'LSJ 담당' },
+  { id:'min',     pw:'min123',  role:'actor',  actors:['KM'],   canEdit:true,  label:'KM 담당' },
+  { id:'minji',   pw:'mj1234',  role:'actor',  actors:['KMJ'], canEdit:true,  label:'KMJ 담당' },
+  { id:'seohyun', pw:'sh1234',  role:'actor',  actors:['LSH'], canEdit:true,  label:'LSH 담당' },
+  { id:'junseo',  pw:'js1234',  role:'actor',  actors:['PJS'], canEdit:true,  label:'PJS 담당' }
 ];
 
 // ═══════════════════════════════════════════════════
@@ -1117,7 +1117,7 @@ function renderAdminPanel() {
       </div>
       <div class="form-section">
         <label class="form-label">이름/설명</label>
-        <input type="text" class="form-input" id="new-user-label" placeholder="예: 이민호 담당">
+        <input type="text" class="form-input" id="new-user-label" placeholder="예: LMH 담당">
       </div>
       <div class="form-section">
         <label class="form-label">권한</label>
