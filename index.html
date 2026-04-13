@@ -399,6 +399,9 @@
           <button class="view-btn active" id="btn-cal-view" onclick="setView('calendar')">📅</button>
           <button class="view-btn" id="btn-list-view" onclick="setView('list')">📋</button>
         </div>
+        <button id="sync-btn" onclick="manualSync()" title="새로고침"
+          style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+          color:var(--text2);font-size:15px;padding:5px 9px;cursor:pointer;line-height:1;">🔄</button>
         <div class="user-badge" id="user-badge" onclick="openUserMenu()">
           <div class="dot" id="user-badge-dot"></div>
           <span id="user-badge-name"></span>
@@ -699,6 +702,7 @@ async function doLogin() {
 }
 
 function logout() {
+  stopAutoSync();
   state.currentUser = null;
   localStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(SESSION_KEY);
@@ -755,7 +759,7 @@ function startApp() {
 
   buildActorFilter();
   renderCurrentView();
-  if (state.apiUrl) { loadUsersFromServer(); syncFromServer(); }
+  if (state.apiUrl) { loadUsersFromServer(); syncFromServer(false); startAutoSync(); }
 }
 
 // ═══════════════════════════════════════════════════
@@ -1464,9 +1468,32 @@ function adminDeleteUser(id) {
 // ═══════════════════════════════════════════════════
 //  SERVER SYNC (Google Apps Script)
 // ═══════════════════════════════════════════════════
+let autoSyncTimer = null;
+
+function startAutoSync() {
+  stopAutoSync();
+  // 30초마다 백그라운드 동기화
+  autoSyncTimer = setInterval(() => { syncFromServer(false); }, 30000);
+}
+function stopAutoSync() {
+  if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
+}
+
+async function manualSync() {
+  const btn = document.getElementById('sync-btn');
+  if (btn) { btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+  await syncFromServer(true);
+  if (btn) {
+    btn.style.opacity = '1'; btn.style.pointerEvents = '';
+    // 잠깐 체크 표시
+    btn.textContent = '✅';
+    setTimeout(() => { btn.textContent = '🔄'; }, 1200);
+  }
+}
+
 async function syncFromServer(showIndicator) {
   if (!state.apiUrl) return;
-  if (showIndicator) showToast('🔄 서버에서 불러오는 중...');
+  if (showIndicator) showToast('🔄 불러오는 중...');
   try {
     const res = await fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now());
     const text = await res.text();
@@ -1477,7 +1504,7 @@ async function syncFromServer(showIndicator) {
       state.events = data.events;
       saveEvents();
       renderCurrentView();
-      if (showIndicator) showToast('✅ 동기화 완료 (' + data.events.length + '개 일정)');
+      if (showIndicator) showToast('✅ 완료 (' + data.events.length + '개)');
     }
   } catch(e) {
     if (showIndicator) showToast('❌ 실패: ' + e.message);
