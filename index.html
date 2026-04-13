@@ -571,7 +571,7 @@ let state = {
   events: [],
   users: [],
   currentUser: null,
-  apiUrl: ''
+  apiUrl: 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec'
 };
 
 // ═══════════════════════════════════════════════════
@@ -583,7 +583,8 @@ function loadAll() {
     const stored = JSON.parse(localStorage.getItem(USERS_KEY));
     state.users = stored && stored.length ? stored : JSON.parse(JSON.stringify(DEFAULT_USERS));
   } catch(e) { state.users = JSON.parse(JSON.stringify(DEFAULT_USERS)); }
-  try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); state.apiUrl = s.apiUrl || ''; } catch(e) {}
+  const DEFAULT_API = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+  try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); state.apiUrl = s.apiUrl || DEFAULT_API; } catch(e) { state.apiUrl = DEFAULT_API; }
 }
 function saveEvents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events)); }
 function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.users)); }
