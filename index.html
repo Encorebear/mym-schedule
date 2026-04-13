@@ -1868,6 +1868,7 @@ function generateExcel() {
 
   // ── 이벤트 필터링 ──
   let evts = state.events.filter(ev => {
+    if (ev.type === PRIVATE_TYPE) return false;                                      // 비공개 제외
     const d = new Date(ev.date);
     if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
     if (period === 'year'  &&  d.getFullYear() !== year)                             return false;
