@@ -74,11 +74,14 @@
   .login-version { font-size: 11px; color: var(--text3); margin-top: 24px; }
 
   /* ── MAIN APP ── */
-  #main-app { display: none; padding-bottom: 80px; }
+  #main-app {
+    display: none; flex-direction: column;
+    height: 100dvh; overflow: hidden; padding-bottom: 0;
+  }
 
   /* ── HEADER ── */
   .app-header {
-    position: sticky; top: 0; z-index: 100;
+    flex-shrink: 0; z-index: 100;
     background: rgba(15,17,23,0.95); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border); padding: 12px 16px 10px;
   }
@@ -122,7 +125,7 @@
   .nav-btn:active { background: var(--bg4); transform: scale(0.92); }
 
   /* ── ACTOR FILTER ── */
-  .actor-filter { padding: 8px 12px 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .actor-filter { flex-shrink: 0; padding: 8px 12px 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .actor-filter::-webkit-scrollbar { display: none; }
   .actor-chip {
     flex-shrink: 0; padding: 5px 10px; border-radius: 20px;
@@ -131,34 +134,44 @@
   }
 
   /* ── WEEKDAY ── */
-  .weekday-header { display: grid; grid-template-columns: repeat(7, 1fr); padding: 8px 4px 4px; gap: 2px; }
+  .weekday-header { flex-shrink: 0; display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px 4px 3px; gap: 2px; }
   .weekday-label { text-align: center; font-size: 11px; font-weight: 600; color: var(--text3); padding: 2px 0; }
 
   /* ── CALENDAR ── */
-  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 4px 8px; }
-  .calendar-grid-wrap { overflow-x: hidden; }
+  #calendar-view {
+    flex: 1; min-height: 0; display: flex;
+    flex-direction: column; overflow: hidden; padding: 0 4px 4px;
+  }
+  .calendar-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px; flex: 1; min-height: 0; grid-auto-rows: 1fr;
+  }
+  #list-view { flex: 1; min-height: 0; overflow-y: auto; }
   .cal-day {
-    background: var(--bg2); border-radius: 8px; min-height: 36px;
-    padding: 4px 3px; cursor: pointer; border: 1px solid transparent;
-    transition: background 0.15s; vertical-align: top;
+    background: var(--bg2); border-radius: 6px;
+    padding: 3px 3px 2px; cursor: pointer; border: 1px solid transparent;
+    transition: background 0.15s;
+    display: flex; flex-direction: column; overflow: hidden; min-height: 0;
   }
   .cal-day:active { background: var(--bg3); }
-  .cal-day.other-month { opacity: 0.3; }
+  .cal-day.other-month { opacity: 0.25; }
   .cal-day.today { border-color: var(--accent); }
   .day-num {
     font-size: 11px; font-weight: 600; color: var(--text2);
-    line-height: 1.6; display: flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%; margin-bottom: 2px;
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   }
   .cal-day.today .day-num { background: var(--accent); color: white; }
-  .event-dots { display: flex; flex-direction: column; gap: 1px; }
+  .event-dots {
+    display: flex; flex-direction: column; gap: 1px;
+    flex: 1; min-height: 0; overflow: hidden;
+  }
   .event-dot {
-    height: 13px; border-radius: 3px; font-size: 8px; font-weight: 600;
+    flex-shrink: 0; height: 13px; border-radius: 3px; font-size: 8px; font-weight: 600;
     padding: 0 3px; line-height: 13px; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-    color: rgba(0,0,0,0.85);
   }
-  .more-count { font-size: 8px; color: var(--text3); padding: 0 2px; }
+  .more-count { font-size: 8px; color: var(--text3); padding: 0 2px; flex-shrink: 0; }
 
   /* ── FAB ── */
   .fab {
@@ -737,7 +750,7 @@ function tryAutoLogin() {
 function startApp() {
   const user = state.currentUser;
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('main-app').style.display = 'flex';
 
   // User badge
   const dot = document.getElementById('user-badge-dot');
@@ -868,11 +881,13 @@ function renderCalendar() {
     let cls = 'cal-day' + (!current ? ' other-month' : '') + (isToday ? ' today' : '');
     const dayColor = dow === 0 ? 'color:#f87171' : (dow === 6 ? 'color:#a78bfa' : '');
     let dots = '';
+    // 셀 높이에 따라 보여줄 수 있는 최대 개수 계산 (셀당 약 14px, day-num 20px)
+    // 일단 모두 렌더하고 CSS overflow:hidden 으로 잘림 처리
     events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      const label = isPrivate ? '🔒' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
-      const dotBg = isPrivate ? 'rgba(100,116,139,0.6)' : (ac.bg||'rgba(59,130,246,0.15)');
+      const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
+      const dotBg = isPrivate ? 'rgba(100,116,139,0.4)' : (ac.bg||'rgba(59,130,246,0.15)');
       const dotColor = isPrivate ? '#94a3b8' : (ac.color||'#3b82f6');
       dots += `<div class="event-dot" style="background:${dotBg};color:${dotColor};">${label}</div>`;
     });
