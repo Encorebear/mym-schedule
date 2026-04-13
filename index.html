@@ -1234,7 +1234,7 @@ function editStaffHours(ci, ti) {
   if (!item) return;
   const nm = typeof item === 'string' ? item : item.name;
   const curHr = typeof item === 'string' ? '' : (item.hours||'');
-  const newHr = prompt(\`[\${nm}] 근무시간(h) 입력:\`, curHr);
+  const newHr = prompt('[' + nm + '] 근무시간(h) 입력:', curHr);
   if (newHr === null) return;
   staffData[cat][ti] = {name: nm, hours: newHr.trim()};
   renderStaffTags();
