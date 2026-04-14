@@ -545,12 +545,12 @@
         <input type="text" class="form-input" id="form-vehicle-other" placeholder="차량 번호/종류 직접 입력" style="display:none;margin-bottom:8px;">
         <div style="display:flex;gap:8px;">
           <div style="flex:1;">
-            <label class="form-label" style="font-size:11px;">운행 시작</label>
-            <input type="text" class="form-input" id="form-vehicle-start" placeholder="00:00">
+            <label class="form-label" style="font-size:11px;">시작 주행거리 (KM)</label>
+            <input type="number" class="form-input" id="form-vehicle-km-start" placeholder="예: 12500" min="0">
           </div>
           <div style="flex:1;">
-            <label class="form-label" style="font-size:11px;">운행 종료</label>
-            <input type="text" class="form-input" id="form-vehicle-end" placeholder="00:00">
+            <label class="form-label" style="font-size:11px;">종료 주행거리 (KM)</label>
+            <input type="number" class="form-input" id="form-vehicle-km-end" placeholder="예: 12650" min="0">
           </div>
         </div>
       </div>
@@ -662,7 +662,7 @@
     <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.7;">
       📄 <b>전체일정</b> — 스텝 1인 1행 상세 (출근·퇴근·근무시간)<br>
       📊 <b>일정별요약</b> — 일정 1행, 총 동행인원·총 근무시간 집계<br>
-      🚗 <b>차량운행</b> — 차량별 운행시간 정리
+      🚗 <b>차량운행</b> — 차량별 시작/종료KM 및 주행거리 정리
     </div>
     <button class="btn-submit" onclick="generateExcel()">📥 엑셀 다운로드</button>
     <div id="export-status" style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px;min-height:18px;"></div>
@@ -1215,7 +1215,7 @@ function openEditSheet(id) {
   document.getElementById('form-start-time').value=ev.startTime||'';
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
-  setVehicleField(ev.vehicle||'', '', ev.vehicleStart||'', ev.vehicleEnd||'');
+  setVehicleField(ev.vehicle||'', '', ev.vehicleKmStart||'', ev.vehicleKmEnd||'');
   document.getElementById('form-memo').value=ev.memo||'';
   initStaffTags(ev.staff||'');
   showSheet('form-sheet');
@@ -1397,14 +1397,14 @@ function selectVehicle(val) {
   }
 }
 
-function setVehicleField(val, other, vstart, vend) {
+function setVehicleField(val, other, kmStart, kmEnd) {
   // clear all
   document.querySelectorAll('.vehicle-btn').forEach(function(b) { b.classList.remove('selected'); });
   document.getElementById('form-vehicle').value = '';
   document.getElementById('form-vehicle-other').style.display = 'none';
   document.getElementById('form-vehicle-other').value = '';
-  document.getElementById('form-vehicle-start').value = vstart || '';
-  document.getElementById('form-vehicle-end').value   = vend   || '';
+  document.getElementById('form-vehicle-km-start').value = kmStart || '';
+  document.getElementById('form-vehicle-km-end').value   = kmEnd   || '';
   if (!val) return;
   // determine if val matches a known option or is 기타
   var known = ['161도1599','172우6258','12가5365'];
@@ -1426,8 +1426,8 @@ function resetVehicleField() {
   document.getElementById('form-vehicle').value = '';
   document.getElementById('form-vehicle-other').style.display = 'none';
   document.getElementById('form-vehicle-other').value = '';
-  document.getElementById('form-vehicle-start').value = '';
-  document.getElementById('form-vehicle-end').value   = '';
+  document.getElementById('form-vehicle-km-start').value = '';
+  document.getElementById('form-vehicle-km-end').value   = '';
 }
 
 function formatStaffDisplay(staffJson) {
@@ -1499,8 +1499,8 @@ function submitEventForm(e) {
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
     vehicle:_vehicleFinal,
-    vehicleStart:document.getElementById('form-vehicle-start').value,
-    vehicleEnd:document.getElementById('form-vehicle-end').value,
+    vehicleKmStart:document.getElementById('form-vehicle-km-start').value,
+    vehicleKmEnd:document.getElementById('form-vehicle-km-end').value,
     staff:document.getElementById('form-staff').value,
     memo:document.getElementById('form-memo').value.trim(),
     createdBy: existing ? (existing.createdBy || state.currentUser.id) : state.currentUser.id,
@@ -2154,24 +2154,23 @@ async function generateExcel() {
   var ws3 = wb.addWorksheet('차량운행', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws3.columns = [
     { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
-    { width: 8  }, { width: 8  }, { width: 20 }, { width: 10 }, { width: 10 }, { width: 8 }
+    { width: 8  }, { width: 8  }, { width: 20 }, { width: 12 }, { width: 12 }, { width: 10 }
   ];
   applyTitle(ws3, 'MYM 스케줄 — 차량 운행', periodStr, 11);
-  var hdr3 = ws3.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','차량','운행시작','운행종료','운행(h)']);
+  var hdr3 = ws3.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','차량','시작KM','종료KM','주행KM']);
   applyHeader(hdr3, 11);
   ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
 
   var dataIdx3 = 0;
   vehicleEvts.forEach(function(ev) {
     var d = new Date(ev.date);
-    var vStart = ev.vehicleStart || '';
-    var vEnd   = ev.vehicleEnd   || '';
-    var vHours = vStart && vEnd ? calcTimeHoursStr(vStart, vEnd) : '';
+    var kmS = ev.vehicleKmStart !== '' && ev.vehicleKmStart != null ? parseFloat(ev.vehicleKmStart) : '';
+    var kmE = ev.vehicleKmEnd   !== '' && ev.vehicleKmEnd   != null ? parseFloat(ev.vehicleKmEnd)   : '';
+    var kmD = (kmS !== '' && kmE !== '' && kmE >= kmS) ? (kmE - kmS) : '';
     var row = ws3.addRow([
       ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
       ev.startTime||'', ev.endTime||'',
-      ev.vehicle, vStart, vEnd,
-      vHours !== '' ? parseFloat(vHours) : ''
+      ev.vehicle, kmS, kmE, kmD
     ]);
     applyDataRow(row, dataIdx3++);
   });
