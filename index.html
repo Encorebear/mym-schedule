@@ -162,6 +162,7 @@
     width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
   }
   .cal-day.today .day-num { background: var(--accent); color: white; }
+  .holiday-label { font-size: 8px; color: #f87171; font-weight: 700; line-height: 1.1; margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .event-dots {
     display: flex; flex-direction: column; gap: 1px;
     flex: 1; min-height: 0; overflow: hidden;
@@ -717,6 +718,32 @@ const ACTOR_LIST = Object.keys(ACTORS);
 const EVENT_TYPES = { '촬영':'🎬','미팅':'📋','행사':'🎪','인터뷰':'🎤','이동':'✈️','홍보':'📸','광고':'📢','기타':'📌','비공개':'🔒' };
 const PRIVATE_TYPE = '비공개'; // 관리자만 세부 내용 열람 가능
 
+// ── 한국 공휴일 ──────────────────────────────────────
+const HOLIDAYS_FIXED = {
+  '01-01':'신정', '03-01':'삼일절', '05-01':'근로자의날',
+  '05-05':'어린이날', '06-06':'현충일', '08-15':'광복절',
+  '10-03':'개천절', '10-09':'한글날', '12-25':'크리스마스'
+};
+const HOLIDAYS_LUNAR = {
+  // 2025
+  '2025-01-28':'설날 연휴','2025-01-29':'설날','2025-01-30':'설날 연휴',
+  '2025-05-06':'대체공휴일', // 어린이날+부처님오신날 겹침
+  '2025-10-05':'추석 연휴','2025-10-06':'추석','2025-10-07':'추석 연휴',
+  // 2026
+  '2026-02-16':'설날 연휴','2026-02-17':'설날','2026-02-18':'설날 연휴',
+  '2026-05-24':'부처님오신날',
+  '2026-05-25':'대체공휴일', // 부처님오신날 다음날(일→월)
+  '2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
+  '2026-09-28':'대체공휴일', // 추석연휴 토요일 대체
+  // 2027
+  '2027-02-05':'설날 연휴','2027-02-06':'설날','2027-02-07':'설날 연휴',
+  '2027-05-13':'부처님오신날',
+  '2027-09-14':'추석 연휴','2027-09-15':'추석','2027-09-16':'추석 연휴',
+};
+function getHoliday(dk) {
+  return HOLIDAYS_LUNAR[dk] || HOLIDAYS_FIXED[dk.slice(5)] || null;
+}
+
 const STORAGE_KEY   = 'mym_events_v1';
 const USERS_KEY     = 'mym_users_v1';
 const SETTINGS_KEY  = 'mym_settings_v1';
@@ -1058,23 +1085,25 @@ function renderCalendar() {
     const events = getEventsForDate(key);
     const isToday = key === today;
     const dow = date.getDay(); // 0=Sun,6=Sat
+    const holiday = getHoliday(key);
     let cls = 'cal-day' + (!current ? ' other-month' : '') + (isToday ? ' today' : '');
-    const dayColor = dow === 0 ? 'color:#f87171' : (dow === 6 ? 'color:#a78bfa' : '');
+    // 공휴일이면 빨간색, 일요일도 빨간색, 토요일은 보라색
+    const dayColor = (holiday || dow === 0) ? 'color:#f87171' : (dow === 6 ? 'color:#a78bfa' : '');
     let dots = '';
-    // 셀 높이에 따라 보여줄 수 있는 최대 개수 계산 (셀당 약 14px, day-num 20px)
-    // 일단 모두 렌더하고 CSS overflow:hidden 으로 잘림 처리
     events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      const label = isPrivate ? '🔒 비공개' : `${EVENT_TYPES[ev.type]||''} ${ev.title}`;
+      const prefix = isPrivate ? '' : `[${ev.actor}] `;
+      const label = isPrivate ? '🔒 비공개' : `${prefix}${EVENT_TYPES[ev.type]||''} ${ev.title}`;
       const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
       const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
       const dotShadow = (isPrivate || ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
       dots += `<div class="event-dot" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">${label}</div>`;
     });
+    const holidayHtml = holiday ? `<div class="holiday-label">${holiday}</div>` : '';
     html += `<div class="${cls}" onclick="openDaySheet('${key}')">
       <div class="day-num" style="${dayColor}">${date.getDate()}</div>
-      <div class="event-dots">${dots}</div>
+      ${holidayHtml}<div class="event-dots">${dots}</div>
     </div>`;
   });
   grid.innerHTML = html;
@@ -1108,7 +1137,7 @@ function renderList() {
       html+=`<div class="list-event-card" onclick="openDaySheet('${ev.date}')">
         <div class="list-event-bar" style="background:${isPrivate?'#64748b':ac.color||'#3b82f6'}"></div>
         <div class="list-event-content">
-          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`${EVENT_TYPES[ev.type]||''} ${ev.title}`}</div>
+          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`[${ev.actor}] ${EVENT_TYPES[ev.type]||''} ${ev.title}`}</div>
           <div class="list-event-meta">${isPrivate?ev.actor:`${ev.actor}${t?' · '+t:''}${ev.location?' · 📍'+ev.location:''}`}</div>
         </div>
       </div>`;
