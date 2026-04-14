@@ -355,6 +355,16 @@
   }
   .staff-add-btn:active { background: var(--accent); color: white; }
 
+  /* ── VEHICLE ── */
+  .vehicle-btn {
+    background: var(--bg3); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text2); font-size: 12px;
+    padding: 6px 10px; cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .vehicle-btn.selected {
+    background: var(--accent); border-color: var(--accent); color: white; font-weight: 600;
+  }
+
   /* ── TOAST ── */
   .toast {
     position: fixed; bottom: 90px; left: 50%;
@@ -524,6 +534,27 @@
         <input type="text" class="form-input" id="form-location" placeholder="장소 입력 (선택)">
       </div>
       <div class="form-section">
+        <label class="form-label">차량</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+          <button type="button" class="vehicle-btn" data-veh="161도1599" onclick="selectVehicle('161도1599')">161도1599 (제네시스)</button>
+          <button type="button" class="vehicle-btn" data-veh="172우6258" onclick="selectVehicle('172우6258')">172우6258 (카니발)</button>
+          <button type="button" class="vehicle-btn" data-veh="12가5365" onclick="selectVehicle('12가5365')">12가5365 (그랜져)</button>
+          <button type="button" class="vehicle-btn" data-veh="기타" onclick="selectVehicle('기타')">기타 (직접입력)</button>
+        </div>
+        <input type="hidden" id="form-vehicle">
+        <input type="text" class="form-input" id="form-vehicle-other" placeholder="차량 번호/종류 직접 입력" style="display:none;margin-bottom:8px;">
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <label class="form-label" style="font-size:11px;">운행 시작</label>
+            <input type="text" class="form-input" id="form-vehicle-start" placeholder="00:00">
+          </div>
+          <div style="flex:1;">
+            <label class="form-label" style="font-size:11px;">운행 종료</label>
+            <input type="text" class="form-input" id="form-vehicle-end" placeholder="00:00">
+          </div>
+        </div>
+      </div>
+      <div class="form-section">
         <label class="form-label">동행 / 스텝</label>
         <div id="staff-tags-wrap" style="display:flex;flex-direction:column;gap:8px;"></div>
         <input type="hidden" id="form-staff">
@@ -630,7 +661,8 @@
     </div>
     <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.7;">
       📄 <b>전체일정</b> — 스텝 1인 1행 상세 (출근·퇴근·근무시간)<br>
-      📊 <b>일정별요약</b> — 일정 1행, 총 동행인원·총 근무시간 집계
+      📊 <b>일정별요약</b> — 일정 1행, 총 동행인원·총 근무시간 집계<br>
+      🚗 <b>차량운행</b> — 차량별 운행시간 정리
     </div>
     <button class="btn-submit" onclick="generateExcel()">📥 엑셀 다운로드</button>
     <div id="export-status" style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px;min-height:18px;"></div>
@@ -646,13 +678,13 @@
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
     <div style="flex:1;">
       <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">시작</div>
-      <input type="time" id="stm-start" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
+      <input type="text" id="stm-start" placeholder="00:00" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
         oninput="calcStaffTime()">
     </div>
     <div style="color:var(--text3);font-size:18px;margin-top:16px;">~</div>
     <div style="flex:1;">
       <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">종료</div>
-      <input type="time" id="stm-end" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
+      <input type="text" id="stm-end" placeholder="00:00" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
         oninput="calcStaffTime()">
     </div>
   </div>
@@ -1161,6 +1193,7 @@ function openAddSheet(ds) {
   else if (state.selectedActor!=='all') selectFormActor(state.selectedActor);
 
   document.getElementById('form-date').value=ds||dateKey(new Date());
+  resetVehicleField();
   initStaffTags('');
   showSheet('form-sheet');
 }
@@ -1182,6 +1215,7 @@ function openEditSheet(id) {
   document.getElementById('form-start-time').value=ev.startTime||'';
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
+  setVehicleField(ev.vehicle||'', '', ev.vehicleStart||'', ev.vehicleEnd||'');
   document.getElementById('form-memo').value=ev.memo||'';
   initStaffTags(ev.staff||'');
   showSheet('form-sheet');
@@ -1242,9 +1276,9 @@ function renderStaffTags() {
       + tags
       + '<div class="staff-add-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">'
       + '<input type="text" class="staff-add-input" id="sinput-' + ci + '" placeholder="이름" style="flex:2;min-width:70px;" onkeydown="staffNameKeydown(event,' + ci + ')">' 
-      + '<input type="time" class="staff-add-input" id="sstart-' + ci + '" style="flex:1;min-width:80px;" title="시작시간">'
+      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="flex:1;min-width:60px;" placeholder="00:00" title="시작시간 (예: 09:00)">'
       + '<span style="color:var(--text3);font-size:12px;">~</span>'
-      + '<input type="time" class="staff-add-input" id="send-' + ci + '" style="flex:1;min-width:80px;" title="종료시간">'
+      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="flex:1;min-width:60px;" placeholder="00:00" title="종료시간 (예: 18:00)">'
       + '<button type="button" class="staff-add-btn" onclick="addStaffTag(' + ci + ')">+</button>'
       + '</div>'
       + '</div>'
@@ -1345,6 +1379,57 @@ function syncStaffHidden() {
   if (hidden) hidden.value = JSON.stringify(staffData);
 }
 
+// ═══════════════════════════════════════════════════
+//  VEHICLE FIELD
+// ═══════════════════════════════════════════════════
+function selectVehicle(val) {
+  document.querySelectorAll('.vehicle-btn').forEach(function(b) {
+    b.classList.toggle('selected', b.dataset.veh === val);
+  });
+  document.getElementById('form-vehicle').value = val;
+  var otherEl = document.getElementById('form-vehicle-other');
+  if (val === '기타') {
+    otherEl.style.display = '';
+    otherEl.focus();
+  } else {
+    otherEl.style.display = 'none';
+    otherEl.value = '';
+  }
+}
+
+function setVehicleField(val, other, vstart, vend) {
+  // clear all
+  document.querySelectorAll('.vehicle-btn').forEach(function(b) { b.classList.remove('selected'); });
+  document.getElementById('form-vehicle').value = '';
+  document.getElementById('form-vehicle-other').style.display = 'none';
+  document.getElementById('form-vehicle-other').value = '';
+  document.getElementById('form-vehicle-start').value = vstart || '';
+  document.getElementById('form-vehicle-end').value   = vend   || '';
+  if (!val) return;
+  // determine if val matches a known option or is 기타
+  var known = ['161도1599','172우6258','12가5365'];
+  if (known.indexOf(val) !== -1) {
+    selectVehicle(val);
+  } else {
+    // custom text — select '기타' and fill other
+    document.querySelectorAll('.vehicle-btn').forEach(function(b) {
+      b.classList.toggle('selected', b.dataset.veh === '기타');
+    });
+    document.getElementById('form-vehicle').value = '기타';
+    document.getElementById('form-vehicle-other').style.display = '';
+    document.getElementById('form-vehicle-other').value = other || val;
+  }
+}
+
+function resetVehicleField() {
+  document.querySelectorAll('.vehicle-btn').forEach(function(b) { b.classList.remove('selected'); });
+  document.getElementById('form-vehicle').value = '';
+  document.getElementById('form-vehicle-other').style.display = 'none';
+  document.getElementById('form-vehicle-other').value = '';
+  document.getElementById('form-vehicle-start').value = '';
+  document.getElementById('form-vehicle-end').value   = '';
+}
+
 function formatStaffDisplay(staffJson) {
   if (!staffJson) return '';
   try {
@@ -1394,7 +1479,18 @@ function submitEventForm(e) {
   if (!type)  { showToast('일정 유형을 선택해주세요'); return; }
   if (!title) { showToast('제목을 입력해주세요'); return; }
 
+  // auto-flush any pending (unsubmitted) staff name inputs
+  STAFF_CATS.forEach(function(cat, ci) {
+    var nameEl = document.getElementById('sinput-' + ci);
+    if (nameEl && nameEl.value.trim()) addStaffTag(ci);
+  });
   syncStaffHidden();
+
+  // resolve vehicle value
+  var _vehChoice = document.getElementById('form-vehicle').value;
+  var _vehOther  = document.getElementById('form-vehicle-other').value.trim();
+  var _vehicleFinal = _vehChoice === '기타' ? (_vehOther || '기타') : _vehChoice;
+
   const existing = editingId ? state.events.find(e=>e.id===editingId) : null;
   const ev={
     id: editingId||'ev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
@@ -1402,6 +1498,9 @@ function submitEventForm(e) {
     startTime:document.getElementById('form-start-time').value,
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
+    vehicle:_vehicleFinal,
+    vehicleStart:document.getElementById('form-vehicle-start').value,
+    vehicleEnd:document.getElementById('form-vehicle-end').value,
     staff:document.getElementById('form-staff').value,
     memo:document.getElementById('form-memo').value.trim(),
     createdBy: existing ? (existing.createdBy || state.currentUser.id) : state.currentUser.id,
@@ -2049,6 +2148,40 @@ async function generateExcel() {
     ]);
     applyDataRow(row, dataIdx2++);
   });
+
+  // ══ Sheet 3: 차량 운행 ═══════════════════════════════
+  var vehicleEvts = evts.filter(function(ev) { return ev.vehicle && ev.vehicle.trim(); });
+  var ws3 = wb.addWorksheet('차량운행', { views: [{ state: 'frozen', ySplit: 3 }] });
+  ws3.columns = [
+    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
+    { width: 8  }, { width: 8  }, { width: 20 }, { width: 10 }, { width: 10 }, { width: 8 }
+  ];
+  applyTitle(ws3, 'MYM 스케줄 — 차량 운행', periodStr, 11);
+  var hdr3 = ws3.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','차량','운행시작','운행종료','운행(h)']);
+  applyHeader(hdr3, 11);
+  ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
+
+  var dataIdx3 = 0;
+  vehicleEvts.forEach(function(ev) {
+    var d = new Date(ev.date);
+    var vStart = ev.vehicleStart || '';
+    var vEnd   = ev.vehicleEnd   || '';
+    var vHours = vStart && vEnd ? calcTimeHoursStr(vStart, vEnd) : '';
+    var row = ws3.addRow([
+      ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+      ev.startTime||'', ev.endTime||'',
+      ev.vehicle, vStart, vEnd,
+      vHours !== '' ? parseFloat(vHours) : ''
+    ]);
+    applyDataRow(row, dataIdx3++);
+  });
+  if (vehicleEvts.length === 0) {
+    var emptyRow = ws3.addRow(['해당 기간 차량 운행 내역 없음']);
+    ws3.mergeCells(4, 1, 4, 11);
+    var ec = ws3.getCell(4, 1);
+    ec.font      = { italic: true, color: { argb: 'FF888888' } };
+    ec.alignment = { horizontal: 'center', vertical: 'middle' };
+  }
 
   // ── 파일명 ──
   var fname = 'MYM스케줄';
