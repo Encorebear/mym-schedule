@@ -810,6 +810,57 @@ function isHidden(ev) {
 // ═══════════════════════════════════════════════════
 //  AUTH
 // ═══════════════════════════════════════════════════
+// ── 로그인 시도 횟수 제한 (5회 실패 → 15분 잠금) ──
+const LOGIN_LOCK_KEY = 'mym_login_lock';
+const MAX_ATTEMPTS   = 5;
+const LOCK_DURATION  = 15 * 60 * 1000; // 15분 ms
+
+function getLockInfo() {
+  try { return JSON.parse(localStorage.getItem(LOGIN_LOCK_KEY)) || {}; } catch(e) { return {}; }
+}
+function setLockInfo(obj) { localStorage.setItem(LOGIN_LOCK_KEY, JSON.stringify(obj)); }
+
+function checkLock(id) {
+  const info = getLockInfo();
+  const rec  = info[id];
+  if (!rec) return null; // 잠금 없음
+  if (rec.lockedUntil && Date.now() < rec.lockedUntil) {
+    const remain = Math.ceil((rec.lockedUntil - Date.now()) / 60000);
+    return '로그인 5회 실패로 ' + remain + '분간 잠겼습니다. 잠시 후 다시 시도해주세요.';
+  }
+  // 잠금 해제된 경우 초기화
+  if (rec.lockedUntil && Date.now() >= rec.lockedUntil) {
+    const info2 = getLockInfo();
+    delete info2[id];
+    setLockInfo(info2);
+  }
+  return null;
+}
+
+function recordFailedAttempt(id) {
+  const info = getLockInfo();
+  if (!info[id]) info[id] = { attempts: 0 };
+  info[id].attempts += 1;
+  if (info[id].attempts >= MAX_ATTEMPTS) {
+    info[id].lockedUntil = Date.now() + LOCK_DURATION;
+    info[id].attempts    = 0;
+  }
+  setLockInfo(info);
+}
+
+function clearFailedAttempts(id) {
+  const info = getLockInfo();
+  delete info[id];
+  setLockInfo(info);
+}
+
+function getRemainingAttempts(id) {
+  const info = getLockInfo();
+  const rec  = info[id];
+  if (!rec || !rec.attempts) return MAX_ATTEMPTS;
+  return MAX_ATTEMPTS - rec.attempts;
+}
+
 async function doLogin() {
   const id = document.getElementById('login-id').value.trim();
   const pw = document.getElementById('login-pw').value;
@@ -818,13 +869,27 @@ async function doLogin() {
 
   if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력해주세요'; return; }
 
+  // 잠금 확인
+  const lockMsg = checkLock(id);
+  if (lockMsg) { errEl.textContent = lockMsg; return; }
+
   // 로그인 시 서버에서 최신 계정 정보 가져오기
   errEl.textContent = '로그인 중...';
   await loadUsersFromServer();
 
   const user = state.users.find(u => u.id === id && u.pw === pw);
-  if (!user) { errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다'; return; }
+  if (!user) {
+    recordFailedAttempt(id);
+    const remain = getRemainingAttempts(id);
+    if (remain <= 0) {
+      errEl.textContent = '로그인 5회 실패로 15분간 잠겼습니다.';
+    } else {
+      errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다. (남은 시도: ' + remain + '회)';
+    }
+    return;
+  }
 
+  clearFailedAttempts(id);
   state.currentUser = user;
   // 로그인 유지 체크 시 localStorage, 아니면 sessionStorage
   const store = remember ? localStorage : sessionStorage;
