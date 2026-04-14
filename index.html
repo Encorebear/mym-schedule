@@ -721,8 +721,8 @@ const STORAGE_KEY   = 'mym_events_v1';
 const USERS_KEY     = 'mym_users_v1';
 const SETTINGS_KEY  = 'mym_settings_v1';
 const SESSION_KEY   = 'mym_session_v1';
-const API_KEY       = 'MYM_K9xpR7vL2024';
-const DEFAULT_API   = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+const API_KEY       = '';   // 실제 키는 Netlify 환경변수에 저장 (서버에서만 사용)
+const DEFAULT_API   = '/.netlify/functions/api'; // 프록시를 통해 GAS URL 숨김
 
 // ─── DEFAULT USERS ───────────────────────────────
 // role: 'admin' | 'actor' | 'viewer'
@@ -749,7 +749,7 @@ let state = {
   events: [],
   users: [],
   currentUser: null,
-  apiUrl: 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec'
+  apiUrl: '/.netlify/functions/api'
 };
 
 // ═══════════════════════════════════════════════════
@@ -761,7 +761,7 @@ function loadAll() {
     const stored = JSON.parse(localStorage.getItem(USERS_KEY));
     state.users = stored && stored.length ? stored : JSON.parse(JSON.stringify(DEFAULT_USERS));
   } catch(e) { state.users = JSON.parse(JSON.stringify(DEFAULT_USERS)); }
-    try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); state.apiUrl = s.apiUrl || DEFAULT_API; } catch(e) { state.apiUrl = DEFAULT_API; }
+    state.apiUrl = DEFAULT_API; // 항상 프록시 사용 (환경변수에서 실제 GAS URL 관리)
 }
 function saveEvents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events)); }
 function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.users)); pushUsersToServer(); }
@@ -1921,15 +1921,9 @@ function openSyncSettings() {
       </div>
       <div class="sheet-body">
         <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px;">
-          여러 기기에서 일정을 공유하려면<br>Google Apps Script 웹앱 URL을 입력하세요.
+          서버 동기화는 자동으로 설정돼 있습니다.<br>
+          <span style="color:var(--accent);font-size:12px;">🔒 연결 정보는 서버에 안전하게 보관됩니다.</span>
         </p>
-        <div class="form-section">
-          <label class="form-label">Apps Script 웹앱 URL</label>
-          <input type="url" class="form-input" id="sync-url-input"
-            placeholder="https://script.google.com/macros/s/.../exec"
-            value="${state.apiUrl}">
-        </div>
-        <button class="btn-submit" onclick="saveSyncUrl()" style="margin-bottom:10px;">저장</button>
         <button class="btn-submit" onclick="syncFromServer(true)"
           style="background:var(--bg4);border:1px solid var(--border);color:var(--text2);margin-bottom:10px;">🔄 지금 동기화</button>
         <div id="sync-test-status" class="sync-status"></div>
