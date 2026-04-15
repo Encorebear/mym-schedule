@@ -1340,33 +1340,32 @@ function renderStaffTags() {
   if (!wrap) return;
   wrap.innerHTML = STAFF_CATS.map((cat, ci) => {
     const tags = (staffData[cat]||[]).map((item, ti) => {
-      const nm   = typeof item === 'string' ? item : (item.name||'');
-      const st   = typeof item === 'string' ? '' : (item.startTime||'');
-      const en   = typeof item === 'string' ? '' : (item.endTime||'');
-      const hr   = typeof item === 'string' ? '' : (item.hours||'');
+      const nm = typeof item === 'string' ? item : (item.name||'');
+      const st = typeof item === 'string' ? '' : (item.startTime||'');
+      const en = typeof item === 'string' ? '' : (item.endTime||'');
+      const hr = typeof item === 'string' ? '' : (item.hours||'');
       let badge = '';
       if (st && en) {
-        badge = '<span style="background:rgba(99,179,237,0.2);color:#90cdf4;border-radius:3px;padding:0 5px;font-size:10px;margin-left:4px;">' + st + '~' + en + (hr ? ' (' + hr + 'h)' : '') + '</span>';
+        badge = '<span style="background:rgba(99,179,237,0.2);color:#90cdf4;border-radius:3px;padding:0 4px;font-size:10px;margin-left:3px;">' + st + '~' + en + (hr ? ' (' + hr + 'h)' : '') + '</span>';
       } else if (hr) {
-        badge = '<span style="background:rgba(99,179,237,0.2);color:#90cdf4;border-radius:3px;padding:0 5px;font-size:10px;margin-left:4px;">' + hr + 'h</span>';
+        badge = '<span style="background:rgba(99,179,237,0.2);color:#90cdf4;border-radius:3px;padding:0 4px;font-size:10px;margin-left:3px;">' + hr + 'h</span>';
       }
       var mo = typeof item === 'string' ? '' : (item.memo||'');
-      if (mo) badge += '<span style="color:var(--text3);font-size:10px;margin-left:3px;" title="' + mo + '">📝</span>';
+      if (mo) badge += '<span style="color:var(--text3);font-size:10px;margin-left:2px;" title="' + mo + '">📝</span>';
       return '<div class="staff-tag" style="cursor:pointer;" onclick="openStaffTimeModal(' + ci + ',' + ti + ')" title="클릭하여 근무시간 수정">' + nm + badge + '<button type="button" class="staff-tag-del" onclick="event.stopPropagation();removeStaffTag(' + ci + ',' + ti + ')">×</button></div>';
     }).join('');
-    return '<div class="staff-category">'
-      + '<div class="staff-cat-label">' + cat + '</div>'
-      + '<div class="staff-tags-row">'
-      + tags
-      + '<div class="staff-add-row" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;">'
+    // ── 1줄 레이아웃: [카테고리] [이름입력] [00:00]~[00:00] [+]
+    var row = '<div style="display:flex;align-items:center;gap:4px;">'
+      + '<div class="staff-cat-label" style="width:54px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + cat + '">' + cat + '</div>'
       + '<input type="text" class="staff-add-input" id="sinput-' + ci + '" placeholder="이름" style="flex:2;min-width:0;" onkeydown="staffNameKeydown(event,' + ci + ')">'
-      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="flex:1;min-width:0;width:52px;" placeholder="00:00" title="시작시간 (예: 09:00)">'
-      + '<span style="color:var(--text3);font-size:12px;flex-shrink:0;">~</span>'
-      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="flex:1;min-width:0;width:52px;" placeholder="00:00" title="종료시간 (예: 18:00)">'
+      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="width:46px;flex-shrink:0;" placeholder="00:00" title="시작시간">'
+      + '<span style="color:var(--text3);font-size:11px;flex-shrink:0;">~</span>'
+      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="width:46px;flex-shrink:0;" placeholder="00:00" title="종료시간">'
       + '<button type="button" class="staff-add-btn" onclick="addStaffTag(' + ci + ')">+</button>'
-      + '</div>'
-      + '</div>'
       + '</div>';
+    // 추가된 태그는 아래에 표시 (있을 때만)
+    var tagsHtml = tags ? '<div class="staff-tags-row" style="padding-left:58px;margin-top:3px;">' + tags + '</div>' : '';
+    return '<div class="staff-category" style="padding:6px 10px;">' + row + tagsHtml + '</div>';
   }).join('');
   syncStaffHidden();
 }
