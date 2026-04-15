@@ -543,17 +543,7 @@
           <button type="button" class="vehicle-btn" data-veh="기타" onclick="selectVehicle('기타')">기타 (직접입력)</button>
         </div>
         <input type="hidden" id="form-vehicle">
-        <input type="text" class="form-input" id="form-vehicle-other" placeholder="차량 번호/종류 직접 입력" style="display:none;margin-bottom:8px;">
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <label class="form-label" style="font-size:11px;">시작 주행거리 (KM)</label>
-            <input type="number" class="form-input" id="form-vehicle-km-start" placeholder="예: 12500" min="0">
-          </div>
-          <div style="flex:1;">
-            <label class="form-label" style="font-size:11px;">종료 주행거리 (KM)</label>
-            <input type="number" class="form-input" id="form-vehicle-km-end" placeholder="예: 12650" min="0">
-          </div>
-        </div>
+        <input type="text" class="form-input" id="form-vehicle-other" placeholder="차량 번호/종류 직접 입력" style="display:none;">
       </div>
       <div class="form-section">
         <label class="form-label">동행 / 스텝</label>
@@ -1309,7 +1299,7 @@ function openEditSheet(id) {
   document.getElementById('form-start-time').value=ev.startTime||'';
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
-  setVehicleField(ev.vehicle||'', '', ev.vehicleKmStart||'', ev.vehicleKmEnd||'');
+  setVehicleField(ev.vehicle||'', '');
   document.getElementById('form-memo').value=ev.memo||'';
   initStaffTags(ev.staff||'');
   showSheet('form-sheet');
@@ -1368,11 +1358,11 @@ function renderStaffTags() {
       + '<div class="staff-cat-label">' + cat + '</div>'
       + '<div class="staff-tags-row">'
       + tags
-      + '<div class="staff-add-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">'
-      + '<input type="text" class="staff-add-input" id="sinput-' + ci + '" placeholder="이름" style="flex:2;min-width:70px;" onkeydown="staffNameKeydown(event,' + ci + ')">' 
-      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="flex:1;min-width:60px;" placeholder="00:00" title="시작시간 (예: 09:00)">'
-      + '<span style="color:var(--text3);font-size:12px;">~</span>'
-      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="flex:1;min-width:60px;" placeholder="00:00" title="종료시간 (예: 18:00)">'
+      + '<div class="staff-add-row" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;">'
+      + '<input type="text" class="staff-add-input" id="sinput-' + ci + '" placeholder="이름" style="flex:2;min-width:0;" onkeydown="staffNameKeydown(event,' + ci + ')">'
+      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="flex:1;min-width:0;width:52px;" placeholder="00:00" title="시작시간 (예: 09:00)">'
+      + '<span style="color:var(--text3);font-size:12px;flex-shrink:0;">~</span>'
+      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="flex:1;min-width:0;width:52px;" placeholder="00:00" title="종료시간 (예: 18:00)">'
       + '<button type="button" class="staff-add-btn" onclick="addStaffTag(' + ci + ')">+</button>'
       + '</div>'
       + '</div>'
@@ -1491,14 +1481,12 @@ function selectVehicle(val) {
   }
 }
 
-function setVehicleField(val, other, kmStart, kmEnd) {
+function setVehicleField(val, other) {
   // clear all
   document.querySelectorAll('.vehicle-btn').forEach(function(b) { b.classList.remove('selected'); });
   document.getElementById('form-vehicle').value = '';
   document.getElementById('form-vehicle-other').style.display = 'none';
   document.getElementById('form-vehicle-other').value = '';
-  document.getElementById('form-vehicle-km-start').value = kmStart || '';
-  document.getElementById('form-vehicle-km-end').value   = kmEnd   || '';
   if (!val) return;
   // determine if val matches a known option or is 기타
   var known = ['161도1599','172우6258','12가5365'];
@@ -1520,8 +1508,6 @@ function resetVehicleField() {
   document.getElementById('form-vehicle').value = '';
   document.getElementById('form-vehicle-other').style.display = 'none';
   document.getElementById('form-vehicle-other').value = '';
-  document.getElementById('form-vehicle-km-start').value = '';
-  document.getElementById('form-vehicle-km-end').value   = '';
 }
 
 function formatStaffDisplay(staffJson) {
@@ -1593,8 +1579,6 @@ function submitEventForm(e) {
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
     vehicle:_vehicleFinal,
-    vehicleKmStart:document.getElementById('form-vehicle-km-start').value,
-    vehicleKmEnd:document.getElementById('form-vehicle-km-end').value,
     staff:document.getElementById('form-staff').value,
     memo:document.getElementById('form-memo').value.trim(),
     createdBy: existing ? (existing.createdBy || state.currentUser.id) : state.currentUser.id,
@@ -2241,30 +2225,26 @@ async function generateExcel() {
   var vehicleEvts = evts.filter(function(ev) { return ev.vehicle && ev.vehicle.trim(); });
   var ws3 = wb.addWorksheet('차량운행', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws3.columns = [
-    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
-    { width: 8  }, { width: 8  }, { width: 20 }, { width: 12 }, { width: 12 }, { width: 10 }
+    { width: 12 }, { width: 5 }, { width: 8 }, { width: 8 }, { width: 26 },
+    { width: 8  }, { width: 8 }, { width: 20 }, { width: 22 }
   ];
-  applyTitle(ws3, 'MYM 스케줄 — 차량 운행', periodStr, 11);
-  var hdr3 = ws3.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','차량','시작KM','종료KM','주행KM']);
-  applyHeader(hdr3, 11);
-  ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
+  applyTitle(ws3, 'MYM 스케줄 — 차량 운행', periodStr, 9);
+  var hdr3 = ws3.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','차량','메모']);
+  applyHeader(hdr3, 9);
+  ws3.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 9 } };
 
   var dataIdx3 = 0;
   vehicleEvts.forEach(function(ev) {
     var d = new Date(ev.date);
-    var kmS = ev.vehicleKmStart !== '' && ev.vehicleKmStart != null ? parseFloat(ev.vehicleKmStart) : '';
-    var kmE = ev.vehicleKmEnd   !== '' && ev.vehicleKmEnd   != null ? parseFloat(ev.vehicleKmEnd)   : '';
-    var kmD = (kmS !== '' && kmE !== '' && kmE >= kmS) ? (kmE - kmS) : '';
     var row = ws3.addRow([
       ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
-      ev.startTime||'', ev.endTime||'',
-      ev.vehicle, kmS, kmE, kmD
+      ev.startTime||'', ev.endTime||'', ev.vehicle, ev.memo||''
     ]);
     applyDataRow(row, dataIdx3++);
   });
   if (vehicleEvts.length === 0) {
     var emptyRow = ws3.addRow(['해당 기간 차량 운행 내역 없음']);
-    ws3.mergeCells(4, 1, 4, 11);
+    ws3.mergeCells(4, 1, 4, 9);
     var ec = ws3.getCell(4, 1);
     ec.font      = { italic: true, color: { argb: 'FF888888' } };
     ec.alignment = { horizontal: 'center', vertical: 'middle' };
