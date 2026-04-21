@@ -460,10 +460,8 @@
   .wash-badge {
     font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; flex-shrink: 0;
   }
-  .wb-외부세차 { background: rgba(59,130,246,0.2);  color: #60a5fa; }
-  .wb-실내청소 { background: rgba(167,139,250,0.2); color: #a78bfa; }
-  .wb-풀케어   { background: rgba(34,197,94,0.2);   color: #34d399; }
-  .wb-유리코팅 { background: rgba(6,182,212,0.2);   color: #06b6d4; }
+  .wb-손세차   { background: rgba(59,130,246,0.2);  color: #60a5fa; }
+  .wb-자동세차 { background: rgba(167,139,250,0.2); color: #a78bfa; }
   .wb-기타     { background: rgba(100,116,139,0.2); color: var(--text2); }
   .wash-del-btn {
     background: none; border: none; color: var(--text3); font-size: 16px;
@@ -900,17 +898,20 @@
       <div class="form-section">
         <label class="form-label">세차 종류 *</label>
         <div class="wash-type-grid">
-          <button type="button" class="wash-type-btn" data-wtype="외부세차" onclick="selectWashType('외부세차')">외부세차</button>
-          <button type="button" class="wash-type-btn" data-wtype="실내청소" onclick="selectWashType('실내청소')">실내청소</button>
-          <button type="button" class="wash-type-btn" data-wtype="풀케어"   onclick="selectWashType('풀케어')">풀케어</button>
-          <button type="button" class="wash-type-btn" data-wtype="유리코팅" onclick="selectWashType('유리코팅')">유리코팅</button>
+          <button type="button" class="wash-type-btn" data-wtype="손세차"   onclick="selectWashType('손세차')">손세차</button>
+          <button type="button" class="wash-type-btn" data-wtype="자동세차" onclick="selectWashType('자동세차')">자동세차</button>
           <button type="button" class="wash-type-btn" data-wtype="기타"     onclick="selectWashType('기타')">기타</button>
         </div>
         <input type="hidden" id="wash-type-val">
+        <input type="text" class="form-input" id="wash-type-custom" placeholder="종류 직접 입력" style="display:none;margin-top:8px;">
       </div>
       <div class="form-section">
         <label class="form-label">담당자</label>
         <input type="text" class="form-input" id="wash-manager" placeholder="담당자 이름 (선택)">
+      </div>
+      <div class="form-section">
+        <label class="form-label">금액</label>
+        <input type="number" class="form-input" id="wash-amount" placeholder="금액 입력 (선택)" min="0" step="1000">
       </div>
       <div class="form-section">
         <label class="form-label">메모</label>
@@ -2782,7 +2783,8 @@ function renderWashRecords() {
   var html = '';
   recs.forEach(function(r) {
     var vDef = VEHICLES_DEF.find(function(v){return v.id===r.vehicle;}) || {};
-    var sub = (r.manager ? r.manager : '') + (r.memo ? (r.manager ? ' · ' : '') + r.memo : '');
+    var amountStr = r.amount ? Number(r.amount).toLocaleString() + '원' : '';
+    var sub = [r.manager, amountStr, r.memo].filter(Boolean).join(' · ');
     var canDel = isAdmin();
     html += '<div class="wash-record-item">'
       + '<div class="wash-record-left">'
@@ -2792,7 +2794,7 @@ function renderWashRecords() {
       + '</div>'
       + (sub ? '<div class="wash-record-bottom">' + sub + '</div>' : '')
       + '</div>'
-      + '<span class="wash-badge wb-' + (r.type||'기타') + '">' + (r.type||'기타') + '</span>'
+      + (function(){ var t=r.type||'기타'; var cls=(t==='손세차'||t==='자동세차')?t:'기타'; return '<span class="wash-badge wb-'+cls+'">'+t+'</span>'; }())
       + (canDel ? '<button class="wash-del-btn" onclick="confirmDeleteWash(\'' + r.id + '\')" title="삭제">🗑</button>' : '')
       + '</div>';
   });
@@ -2806,6 +2808,9 @@ function openWashForm(vehicleId) {
   document.getElementById('wash-form').reset();
   document.getElementById('wash-vehicle-val').value = '';
   document.getElementById('wash-type-val').value = '';
+  document.getElementById('wash-type-custom').style.display = 'none';
+  document.getElementById('wash-type-custom').value = '';
+  document.getElementById('wash-amount').value = '';
   document.querySelectorAll('[data-wveh]').forEach(function(b){ b.classList.remove('selected'); });
   document.querySelectorAll('[data-wtype]').forEach(function(b){ b.classList.remove('selected'); });
   // 날짜 기본값: 오늘
@@ -2834,23 +2839,37 @@ function selectWashType(t) {
   document.querySelectorAll('[data-wtype]').forEach(function(b){
     b.classList.toggle('selected', b.dataset.wtype === t);
   });
+  var custom = document.getElementById('wash-type-custom');
+  if (t === '기타') {
+    custom.style.display = '';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
 }
 
 async function submitWashForm(e) {
   e.preventDefault();
-  var veh  = document.getElementById('wash-vehicle-val').value;
-  var type = document.getElementById('wash-type-val').value;
-  var date = document.getElementById('wash-date').value;
+  var veh    = document.getElementById('wash-vehicle-val').value;
+  var type   = document.getElementById('wash-type-val').value;
+  var date   = document.getElementById('wash-date').value;
+  var custom = (document.getElementById('wash-type-custom').value||'').trim();
   if (!veh)  { showToast('⚠️ 차량을 선택하세요'); return; }
   if (!type) { showToast('⚠️ 세차 종류를 선택하세요'); return; }
+  if (type === '기타' && !custom) { showToast('⚠️ 기타 종류를 직접 입력하세요'); return; }
   if (!date) { showToast('⚠️ 날짜를 입력하세요'); return; }
+  var finalType = (type === '기타' && custom) ? custom : type;
+  var amountRaw = document.getElementById('wash-amount').value;
+  var amount = amountRaw ? parseInt(amountRaw, 10) : null;
 
   var record = {
     id:        'cr' + Date.now() + Math.random().toString(36).slice(2,6),
     date:      date,
     vehicle:   veh,
-    type:      type,
+    type:      finalType,
     manager:   (document.getElementById('wash-manager').value||'').trim(),
+    amount:    amount,
     memo:      (document.getElementById('wash-memo').value||'').trim(),
     createdAt: new Date().toISOString()
   };
