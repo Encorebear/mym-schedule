@@ -502,6 +502,50 @@
   }
   .event-dot.done { opacity:0.45; text-decoration:line-through; }
 
+  /* ── CUSTOM DATE / TIME PICKER ── */
+  .picker-bg {
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:2000;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .picker-sheet {
+    background:var(--bg2); border-radius:20px 20px 0 0; width:100%; max-width:420px;
+    padding:20px 16px 28px; animation:slideUpP 0.22s ease; max-height:92vh; overflow-y:auto;
+  }
+  @keyframes slideUpP { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .picker-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 16px; }
+  .picker-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .picker-month-label { font-size:16px; font-weight:700; color:var(--text); }
+  .picker-nav-btn { background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text2); width:34px; height:34px; cursor:pointer; font-size:18px; line-height:1; }
+  .dp-dow-row { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:4px; }
+  .dp-dow { text-align:center; font-size:11px; color:var(--text3); padding:4px 0; font-weight:600; }
+  .dp-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .dp-day {
+    text-align:center; padding:8px 2px; border-radius:8px;
+    font-size:13px; cursor:pointer; color:var(--text2); transition:background 0.1s;
+  }
+  .dp-day:active { background:var(--bg4); }
+  .dp-day.empty { pointer-events:none; }
+  .dp-day.other-m { color:var(--text3); opacity:0.35; }
+  .dp-day.is-today { color:var(--accent); font-weight:700; }
+  .dp-day.is-sel { background:var(--accent) !important; color:white !important; font-weight:700; border-radius:50%; }
+  .dp-day.is-holiday { color:#f87171; }
+  .dp-day.is-sat { color:#a78bfa; }
+
+  .tp-display { text-align:center; font-size:36px; font-weight:700; color:var(--text); padding:8px 0 16px; letter-spacing:3px; }
+  .tp-section-label { font-size:11px; color:var(--text3); font-weight:600; margin-bottom:8px; }
+  .tp-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:16px; }
+  .tp-cell {
+    padding:8px 0; border-radius:8px; background:var(--bg3); border:1px solid var(--border);
+    color:var(--text2); font-size:13px; cursor:pointer; text-align:center;
+    min-width:44px; flex:1; transition:all 0.1s; max-width:52px;
+  }
+  .tp-cell.sel { background:var(--accent); border-color:var(--accent); color:white; font-weight:700; }
+  .tp-cell:active { opacity:0.7; }
+  .picker-confirm-row { display:flex; gap:8px; margin-top:4px; }
+  .picker-cancel-btn { flex:1; padding:12px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; color:var(--text2); font-size:14px; cursor:pointer; }
+  .picker-ok-btn { flex:2; padding:12px; background:var(--accent); border:none; border-radius:10px; color:white; font-size:14px; font-weight:700; cursor:pointer; }
+  .picker-input { cursor:pointer; caret-color:transparent; user-select:none; }
+
   /* ── 완료 확인 모달 ── */
   .confirm-modal-bg {
     position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
@@ -680,7 +724,7 @@
       </div>
       <div class="form-section">
         <label class="form-label">날짜</label>
-        <input type="date" class="form-input" id="form-date" required>
+        <input type="text" class="form-input picker-input" id="form-date" placeholder="날짜 선택 📅" readonly required onclick="openDatePicker('form-date')">
       </div>
       <div class="form-section">
         <label class="form-label">일정 유형</label>
@@ -706,11 +750,11 @@
         <div class="form-row">
           <div>
             <label class="form-label" style="font-size:11px;">시작</label>
-            <input type="time" class="form-input" id="form-start-time">
+            <input type="text" class="form-input picker-input" id="form-start-time" placeholder="시간 선택 🕐" readonly onclick="openTimePicker('form-start-time')">
           </div>
           <div>
             <label class="form-label" style="font-size:11px;">종료</label>
-            <input type="time" class="form-input" id="form-end-time">
+            <input type="text" class="form-input picker-input" id="form-end-time" placeholder="시간 선택 🕐" readonly onclick="openTimePicker('form-end-time')">
           </div>
         </div>
       </div>
@@ -853,14 +897,14 @@
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
     <div style="flex:1;">
       <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">시작</div>
-      <input type="text" id="stm-start" placeholder="00:00" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
-        oninput="calcStaffTime()">
+      <input type="text" id="stm-start" placeholder="시간 선택" readonly class="picker-input" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;cursor:pointer;"
+        onclick="openTimePicker('stm-start')">
     </div>
     <div style="color:var(--text3);font-size:18px;margin-top:16px;">~</div>
     <div style="flex:1;">
       <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">종료</div>
-      <input type="text" id="stm-end" placeholder="00:00" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;"
-        oninput="calcStaffTime()">
+      <input type="text" id="stm-end" placeholder="시간 선택" readonly class="picker-input" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text1);padding:8px;font-size:15px;box-sizing:border-box;cursor:pointer;"
+        onclick="openTimePicker('stm-end')">
     </div>
   </div>
   <div id="stm-calc" style="text-align:center;font-size:13px;color:var(--accent);min-height:20px;margin-bottom:10px;"></div>
@@ -893,7 +937,7 @@
       </div>
       <div class="form-section">
         <label class="form-label">날짜 *</label>
-        <input type="date" class="form-input" id="wash-date" required>
+        <input type="text" class="form-input picker-input" id="wash-date" placeholder="날짜 선택 📅" readonly required onclick="openDatePicker('wash-date')">
       </div>
       <div class="form-section">
         <label class="form-label">세차 종류 *</label>
@@ -1662,9 +1706,9 @@ function renderStaffTags() {
     var row = '<div style="display:flex;align-items:center;gap:4px;">'
       + '<div class="staff-cat-label" style="width:54px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + cat + '">' + cat + '</div>'
       + '<input type="text" class="staff-add-input" id="sinput-' + ci + '" placeholder="이름" style="flex:2;min-width:0;" onkeydown="staffNameKeydown(event,' + ci + ')">'
-      + '<input type="text" class="staff-add-input" id="sstart-' + ci + '" style="width:46px;flex-shrink:0;" placeholder="00:00" title="시작시간">'
+      + '<input type="text" class="staff-add-input picker-input" id="sstart-' + ci + '" style="width:54px;flex-shrink:0;" placeholder="시간" title="시작시간" readonly onclick="openTimePicker(\'sstart-' + ci + '\')">'
       + '<span style="color:var(--text3);font-size:11px;flex-shrink:0;">~</span>'
-      + '<input type="text" class="staff-add-input" id="send-' + ci + '" style="width:46px;flex-shrink:0;" placeholder="00:00" title="종료시간">'
+      + '<input type="text" class="staff-add-input picker-input" id="send-' + ci + '" style="width:54px;flex-shrink:0;" placeholder="시간" title="종료시간" readonly onclick="openTimePicker(\'send-' + ci + '\')">'
       + '<button type="button" class="staff-add-btn" onclick="addStaffTag(' + ci + ')">+</button>'
       + '</div>';
     // 추가된 태그는 아래에 표시 (있을 때만)
@@ -2622,6 +2666,157 @@ async function generateExcel() {
   navigator.serviceWorker.register('sw.js')
     .catch(err => console.log('SW 등록 실패:', err));
 })();
+
+// ═══════════════════════════════════════════════════
+//  DATE PICKER
+// ═══════════════════════════════════════════════════
+var _dp = { el:null, targetId:null, year:0, month:0, sel:null };
+
+function openDatePicker(inputId) {
+  var val = document.getElementById(inputId).value; // YYYY-MM-DD
+  var d = val ? new Date(val + 'T12:00:00') : new Date();
+  _dp.targetId = inputId;
+  _dp.year  = d.getFullYear();
+  _dp.month = d.getMonth();
+  _dp.sel   = val || null;
+  _renderDP();
+}
+
+function _renderDP() {
+  if (_dp.el) { try { document.body.removeChild(_dp.el); } catch(e){} }
+  var MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var DOWS   = ['일','월','화','수','목','금','토'];
+  var y = _dp.year, m = _dp.month;
+  var first = new Date(y, m, 1).getDay();
+  var dim   = new Date(y, m+1, 0).getDate();
+  var today = dateKey(new Date());
+
+  var dowHtml = DOWS.map(function(d,i){
+    var c = i===0?'color:#f87171':i===6?'color:#a78bfa':'';
+    return '<div class="dp-dow" style="'+c+'">'+d+'</div>';
+  }).join('');
+
+  var daysHtml = '';
+  for (var e=0;e<first;e++) daysHtml += '<div class="dp-day empty"></div>';
+  for (var dd=1;dd<=dim;dd++) {
+    var dk = y+'-'+String(m+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+    var dow = (first+dd-1)%7;
+    var hol = getHoliday(dk);
+    var cls = 'dp-day';
+    if (dk===today)   cls+=' is-today';
+    if (dk===_dp.sel) cls+=' is-sel';
+    if (hol||dow===0) cls+=' is-holiday';
+    else if (dow===6) cls+=' is-sat';
+    daysHtml += '<div class="'+cls+'" onclick="dpSelect(\''+dk+'\')">'+dd+'</div>';
+  }
+
+  var bg = document.createElement('div');
+  bg.className = 'picker-bg';
+  bg.addEventListener('click', function(e){ if(e.target===bg) dpClose(); });
+  bg.innerHTML = '<div class="picker-sheet">'
+    +'<div class="picker-handle"></div>'
+    +'<div class="picker-nav">'
+    +  '<button class="picker-nav-btn" onclick="dpMove(-1)">‹</button>'
+    +  '<div class="picker-month-label">'+y+'년 '+MONTHS[m]+'</div>'
+    +  '<button class="picker-nav-btn" onclick="dpMove(1)">›</button>'
+    +'</div>'
+    +'<div class="dp-dow-row">'+dowHtml+'</div>'
+    +'<div class="dp-grid">'+daysHtml+'</div>'
+    +'<button onclick="dpClose()" class="picker-cancel-btn" style="width:100%;margin-top:14px;">닫기</button>'
+    +'</div>';
+  document.body.appendChild(bg);
+  _dp.el = bg;
+}
+
+function dpMove(dir) {
+  _dp.month += dir;
+  if (_dp.month<0)  { _dp.month=11; _dp.year--; }
+  if (_dp.month>11) { _dp.month=0;  _dp.year++; }
+  _renderDP();
+}
+
+function dpSelect(dk) {
+  _dp.sel = dk;
+  // display as YYYY.MM.DD
+  var parts = dk.split('-');
+  document.getElementById(_dp.targetId).value = dk;
+  // also update display to friendly format
+  document.getElementById(_dp.targetId).value = dk; // keep ISO for logic
+  dpClose();
+}
+
+function dpClose() {
+  if (_dp.el) { try { document.body.removeChild(_dp.el); } catch(e){} _dp.el=null; }
+}
+
+// ═══════════════════════════════════════════════════
+//  TIME PICKER
+// ═══════════════════════════════════════════════════
+var _tp = { el:null, targetId:null, h:null, mi:null, callback:null };
+
+function openTimePicker(inputId, callback) {
+  var val = document.getElementById(inputId).value; // HH:MM
+  _tp.targetId = inputId;
+  _tp.callback = callback || null;
+  _tp.h  = val ? parseInt(val.split(':')[0]) : null;
+  _tp.mi = val ? parseInt(val.split(':')[1]) : null;
+  _renderTP();
+}
+
+function _renderTP() {
+  if (_tp.el) { try { document.body.removeChild(_tp.el); } catch(e){} }
+  var h=_tp.h, mi=_tp.mi;
+  var disp = (h!==null&&mi!==null) ? String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0') : '--:--';
+
+  var hourBtns='';
+  for(var i=0;i<=24;i++) {
+    hourBtns += '<div class="tp-cell'+(h===i?' sel':'')+'" onclick="tpH('+i+')">'+String(i).padStart(2,'0')+'</div>';
+  }
+  var mins=[0,10,20,30,40,50];
+  var minBtns = mins.map(function(m){
+    return '<div class="tp-cell'+(mi===m?' sel':'')+'" onclick="tpM('+m+')">'+String(m).padStart(2,'0')+'</div>';
+  }).join('');
+
+  var bg = document.createElement('div');
+  bg.className = 'picker-bg';
+  bg.addEventListener('click', function(e){ if(e.target===bg) tpClose(); });
+  bg.innerHTML = '<div class="picker-sheet">'
+    +'<div class="picker-handle"></div>'
+    +'<div class="tp-display">'+disp+'</div>'
+    +'<div class="tp-section-label">시 (0~24시)</div>'
+    +'<div class="tp-grid">'+hourBtns+'</div>'
+    +'<div class="tp-section-label">분</div>'
+    +'<div class="tp-grid">'+minBtns+'</div>'
+    +'<div class="picker-confirm-row">'
+    +  '<button class="picker-cancel-btn" onclick="tpClear()">지우기</button>'
+    +  '<button class="picker-cancel-btn" onclick="tpClose()">취소</button>'
+    +  '<button class="picker-ok-btn" onclick="tpOK()">확인</button>'
+    +'</div></div>';
+  document.body.appendChild(bg);
+  _tp.el = bg;
+}
+
+function tpH(v) { _tp.h=v; _renderTP(); }
+function tpM(v) { _tp.mi=v; _renderTP(); }
+
+function tpOK() {
+  if (_tp.h===null||_tp.mi===null) { showToast('시간과 분을 모두 선택하세요'); return; }
+  var val = String(_tp.h).padStart(2,'0')+':'+String(_tp.mi).padStart(2,'0');
+  document.getElementById(_tp.targetId).value = val;
+  if (_tp.targetId==='stm-start'||_tp.targetId==='stm-end') calcStaffTime();
+  if (_tp.callback) _tp.callback(val);
+  tpClose();
+}
+
+function tpClear() {
+  document.getElementById(_tp.targetId).value = '';
+  if (_tp.targetId==='stm-start'||_tp.targetId==='stm-end') calcStaffTime();
+  tpClose();
+}
+
+function tpClose() {
+  if (_tp.el) { try { document.body.removeChild(_tp.el); } catch(e){} _tp.el=null; }
+}
 
 // ═══════════════════════════════════════════════════
 //  VEHICLE MANAGEMENT
