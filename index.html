@@ -504,6 +504,42 @@
   }
   .event-dot.done { opacity:0.45; text-decoration:line-through; }
 
+  /* ── 완료 확인 모달 ── */
+  .confirm-modal-bg {
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .confirm-modal {
+    background:var(--bg2); border:1px solid var(--border); border-radius:16px;
+    padding:24px 20px 20px; max-width:320px; width:100%;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5); animation:modalPop 0.2s ease;
+  }
+  @keyframes modalPop {
+    from { transform:scale(0.9); opacity:0; }
+    to   { transform:scale(1);   opacity:1; }
+  }
+  .confirm-modal-icon { font-size:36px; text-align:center; margin-bottom:12px; }
+  .confirm-modal-title {
+    font-size:16px; font-weight:700; color:var(--text);
+    text-align:center; margin-bottom:10px;
+  }
+  .confirm-modal-warn {
+    background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3);
+    border-radius:10px; padding:10px 13px; margin-bottom:18px;
+    font-size:12px; color:var(--warn); line-height:1.6;
+    display:flex; gap:8px; align-items:flex-start;
+  }
+  .confirm-modal-warn-icon { font-size:15px; flex-shrink:0; margin-top:1px; }
+  .confirm-modal-btns { display:flex; gap:8px; }
+  .confirm-modal-cancel {
+    flex:1; padding:11px; border-radius:10px; border:1px solid var(--border);
+    background:var(--bg3); color:var(--text2); font-size:14px; cursor:pointer;
+  }
+  .confirm-modal-ok {
+    flex:1; padding:11px; border-radius:10px; border:none;
+    background:#22c55e; color:white; font-size:14px; font-weight:700; cursor:pointer;
+  }
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 </head>
@@ -1456,16 +1492,37 @@ function deleteEvent(id, ds) {
 }
 
 function completeEvent(id, ds) {
-  if (!confirm('일정을 완료 처리하시겠습니까?\n완료 후 수정·삭제는 관리자만 가능합니다.')) return;
-  const ev = state.events.find(e=>e.id===id);
-  if (!ev) return;
-  ev.completed = true;
-  ev.completedAt = new Date().toISOString();
-  ev.completedBy = state.currentUser ? state.currentUser.id : '';
-  saveAndSync();
-  renderCurrentView();
-  renderDayBody(ds);
-  showToast('✅ 일정완료 처리됐습니다');
+  // 커스텀 확인 모달
+  const bg = document.createElement('div');
+  bg.className = 'confirm-modal-bg';
+  bg.innerHTML = `
+    <div class="confirm-modal">
+      <div class="confirm-modal-icon">✅</div>
+      <div class="confirm-modal-title">일정을 완료 처리할까요?</div>
+      <div class="confirm-modal-warn">
+        <span class="confirm-modal-warn-icon">⚠️</span>
+        <span>완료 처리 후에는 <b>관리자 계정만</b> 수정·삭제가 가능합니다.<br>일반 담당자는 열람만 할 수 있습니다.</span>
+      </div>
+      <div class="confirm-modal-btns">
+        <button class="confirm-modal-cancel" id="cm-cancel">취소</button>
+        <button class="confirm-modal-ok" id="cm-ok">완료 처리</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  document.getElementById('cm-cancel').onclick = () => document.body.removeChild(bg);
+  bg.addEventListener('click', e => { if (e.target === bg) document.body.removeChild(bg); });
+  document.getElementById('cm-ok').onclick = () => {
+    document.body.removeChild(bg);
+    const ev = state.events.find(e=>e.id===id);
+    if (!ev) return;
+    ev.completed = true;
+    ev.completedAt = new Date().toISOString();
+    ev.completedBy = state.currentUser ? state.currentUser.id : '';
+    saveAndSync();
+    renderCurrentView();
+    renderDayBody(ds);
+    showToast('✅ 일정완료 처리됐습니다');
+  };
 }
 
 function uncompleteEvent(id, ds) {
