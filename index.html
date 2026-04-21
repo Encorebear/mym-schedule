@@ -482,8 +482,8 @@
   .wash-veh-btn-grid { display: flex; flex-direction: column; gap: 6px; }
 
   /* ── 일정 완료 ── */
-  .event-card.completed { opacity: 0.6; }
-  .event-card.completed .event-card-title { text-decoration: line-through; color: var(--text3); }
+  .event-card.completed { border-left-width: 4px; }
+  .event-card.completed .event-card-title { text-decoration: line-through; color: var(--text2); }
   .completed-badge {
     display:inline-block; font-size:10px; font-weight:700;
     background:rgba(34,197,94,0.18); color:#22c55e;
@@ -934,7 +934,7 @@ const ACTORS = {
   'LSJ':  { color: '#f472b6', bg: 'rgba(244,114,182,0.85)', textColor: 'white' },
   'KM':   { color: '#a78bfa', bg: 'rgba(167,139,250,0.85)', textColor: 'white' },
   'KMJ':  { color: '#d97706', bg: 'rgba(251,191,36,0.85)',  textColor: '#1a1200' },
-  'LSH':  { color: '#10b981', bg: 'rgba(52,211,153,0.82)',  textColor: '#082d1f' },
+  'LSH':  { color: '#10b981', bg: 'rgba(52,211,153,0.85)',  textColor: '#082d1f' },
   'PJS':  { color: '#f87171', bg: 'rgba(248,113,113,0.85)', textColor: 'white' },
   '매니저': { color: '#06b6d4', bg: 'rgba(6,182,212,0.85)',   textColor: 'white' },
   '기타':  { color: '#94a3b8', bg: 'rgba(148,163,184,0.85)', textColor: 'white' }
@@ -1451,10 +1451,11 @@ function renderDayBody(ds) {
       const showAdminEdit = isDone && isAdmin();
       const showComplete = !isDone && (userCanEdit || isCreator);
       const staffHtml = formatStaffDisplay(ev.staff);
-      html+=`<div class="event-card${isDone?' completed':''}" style="border-left-color:${isDone?'#22c55e':(ac.color||'#3b82f6')}">
-        <div class="event-card-actor" style="color:${isDone?'#22c55e':(ac.color||'#3b82f6')}">
-          <span style="width:7px;height:7px;border-radius:50%;background:${isDone?'#22c55e':ac.color};display:inline-block;"></span> ${ev.actor}
-          ${isDone?'<span class="completed-badge">완료</span>':''}
+      const cardBg = isDone ? 'background:rgba(34,197,94,0.06);' : '';
+      html+=`<div class="event-card${isDone?' completed':''}" style="border-left-color:${isDone?'#22c55e':(ac.color||'#3b82f6')};${cardBg}">
+        <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${ac.color};display:inline-block;"></span> ${ev.actor}
+          ${isDone?'<span class="completed-badge">✅ 완료</span>':''}
         </div>
         <div class="event-card-title">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>
         <div class="event-card-meta">
@@ -1464,6 +1465,7 @@ function renderDayBody(ds) {
         </div>
         ${staffHtml?`<div style="margin-top:6px;font-size:12px;color:var(--text2);line-height:1.8;">👥 ${staffHtml}</div>`:''}
         ${ev.memo?`<div style="margin-top:5px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
+        ${isDone && !isAdmin()?`<div style="margin-top:8px;font-size:11px;color:#22c55e;opacity:0.7;">완료된 일정입니다. 수정·삭제는 관리자만 가능합니다.</div>`:''}
         <div class="event-card-actions">
           ${showComplete?`<button class="btn-complete" onclick="completeEvent('${ev.id}','${ds}')">✅ 일정완료</button>`:''}
           ${showEdit?`<button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>`:''}
