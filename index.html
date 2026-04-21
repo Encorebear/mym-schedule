@@ -547,6 +547,28 @@
   .picker-input { cursor:pointer; caret-color:transparent; user-select:none; }
 
   /* ── 완료 확인 모달 ── */
+  /* ── 일정 상세보기 모달 ── */
+  .ev-detail-bg {
+    position:fixed; inset:0; z-index:900; background:rgba(0,0,0,0.65);
+    display:flex; align-items:center; justify-content:center; padding:16px;
+  }
+  .ev-detail-modal {
+    background:var(--bg2); border-radius:20px; width:100%; max-width:480px;
+    max-height:88vh; overflow-y:auto; padding:24px 20px 20px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    animation: slideUp .22s ease;
+  }
+  .ev-detail-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+  .ev-detail-close { background:var(--bg4); border:none; color:var(--text2); font-size:18px; width:32px; height:32px; border-radius:50%; cursor:pointer; flex-shrink:0; }
+  .ev-detail-row { display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .ev-detail-row:last-child { border-bottom:none; }
+  .ev-detail-icon { font-size:16px; flex-shrink:0; margin-top:1px; width:20px; text-align:center; }
+  .ev-detail-label { color:var(--text3); font-size:11px; margin-bottom:2px; }
+  .ev-detail-val { color:var(--text); line-height:1.6; }
+  .ev-detail-staff-cat { color:var(--text3); font-size:11px; margin-bottom:3px; }
+  .ev-detail-staff-line { color:var(--text2); font-size:13px; line-height:1.8; }
+  .ev-detail-footer { margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:11px; color:var(--text3); }
+
   .confirm-modal-bg {
     position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
     display:flex; align-items:center; justify-content:center; padding:24px;
@@ -1496,7 +1518,8 @@ function renderDayBody(ds) {
       const showComplete = !isDone && (userCanEdit || isCreator);
       const staffHtml = formatStaffDisplay(ev.staff);
       const cardBg = isDone ? 'background:rgba(34,197,94,0.06);' : '';
-      html+=`<div class="event-card${isDone?' completed':''}" style="border-left-color:${isDone?'#22c55e':(ac.color||'#3b82f6')};${cardBg}">
+      const cardClick = isDone ? `onclick="openEventDetail('${ev.id}')" style="cursor:pointer;"` : '';
+      html+=`<div class="event-card${isDone?' completed':''}" ${cardClick} style="border-left-color:${isDone?'#22c55e':(ac.color||'#3b82f6')};${cardBg}${isDone?'cursor:pointer;':''}">
         <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
           <span style="width:7px;height:7px;border-radius:50%;background:${ac.color};display:inline-block;"></span> ${ev.actor}
           ${isDone?'<span class="completed-badge">✅ 완료</span>':''}
@@ -1505,12 +1528,11 @@ function renderDayBody(ds) {
         <div class="event-card-meta">
           ${t?`<span>🕐 ${t}</span>`:''}
           ${ev.location?`<span>📍 ${ev.location}</span>`:''}
-          ${ev.type?`<span>${EVENT_TYPES[ev.type]||''} ${ev.type}</span>`:''}
         </div>
-        ${staffHtml?`<div style="margin-top:6px;font-size:12px;color:var(--text2);line-height:1.8;">👥 ${staffHtml}</div>`:''}
-        ${ev.memo?`<div style="margin-top:5px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
-        ${isDone && !isAdmin()?`<div style="margin-top:8px;font-size:11px;color:#22c55e;opacity:0.7;">완료된 일정입니다. 수정·삭제는 관리자만 가능합니다.</div>`:''}
-        <div class="event-card-actions">
+        ${isDone?`<div style="margin-top:6px;font-size:11px;color:#22c55e;opacity:0.75;">탭하면 전체 내용을 볼 수 있습니다 →</div>`:''}
+        ${!isDone && staffHtml?`<div style="margin-top:6px;font-size:12px;color:var(--text2);line-height:1.8;">👥 ${staffHtml}</div>`:''}
+        ${!isDone && ev.memo?`<div style="margin-top:5px;font-size:12px;color:var(--text3);line-height:1.5;">📝 ${ev.memo}</div>`:''}
+        <div class="event-card-actions" onclick="event.stopPropagation()">
           ${showComplete?`<button class="btn-complete" onclick="completeEvent('${ev.id}','${ds}')">✅ 일정완료</button>`:''}
           ${showEdit?`<button class="btn-edit" onclick="closeDaySheet();openEditSheet('${ev.id}')">✏️ 수정</button>`:''}
           ${showEdit?`<button class="btn-delete" onclick="deleteEvent('${ev.id}','${ds}')">🗑 삭제</button>`:''}
@@ -2913,16 +2935,33 @@ function renderVehicleDashboard() {
 // Google Sheets가 날짜를 ISO 타임스탬프로 반환하는 경우 처리
 function carDate(str) {
   if (!str) return '';
-  return String(str).slice(0, 10); // "2026-04-21T15:00:00.000Z" → "2026-04-21"
+  var s = String(str).trim();
+  // YYYY-MM-DD 형식 추출 (ISO timestamp, 날짜 문자열 등)
+  var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
+}
+
+function formatCarDate(str) {
+  var d10 = carDate(str);
+  if (!d10) return '날짜 없음';
+  var d = new Date(d10 + 'T12:00:00');
+  if (isNaN(d.getTime())) return d10;
+  var DOW = ['일','월','화','수','목','금','토'];
+  return d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0') + ' (' + DOW[d.getDay()] + ')';
 }
 
 function getDaysSince(dateStr) {
   if (!dateStr) return null;
-  var clean = carDate(dateStr);
-  var d = new Date(clean + 'T12:00:00');
-  var now = new Date();
-  now.setHours(0,0,0,0); d.setHours(0,0,0,0);
-  return Math.floor((now - d) / 86400000);
+  try {
+    var clean = carDate(dateStr);
+    if (!clean) return null;
+    var d = new Date(clean + 'T12:00:00');
+    if (isNaN(d.getTime())) return null;
+    var now = new Date();
+    now.setHours(0,0,0,0); d.setHours(0,0,0,0);
+    var days = Math.floor((now - d) / 86400000);
+    return isNaN(days) ? null : days;
+  } catch(e) { return null; }
 }
 
 function getDaysClass(days) {
@@ -2941,7 +2980,7 @@ function renderVehicleCards() {
     var days = lastRec ? getDaysSince(lastRec.date) : null;
     var dc = getDaysClass(days);
     var daysLabel = days === null ? '기록없음' : days === 0 ? '오늘' : days + '일 전';
-    var lastInfo = lastRec ? carDate(lastRec.date).replace(/-/g,'.') + ' ' + (lastRec.type||'') : '기록없음';
+    var lastInfo = lastRec ? formatCarDate(lastRec.date) + ' ' + (lastRec.type||'') : '기록없음';
     html += '<div class="vehicle-card" onclick="setVehFilter(\'' + v.id + '\')">'
       + '<div class="vehicle-card-icon">' + v.icon + '</div>'
       + '<div class="vehicle-card-info">'
@@ -2989,9 +3028,12 @@ function renderWashRecords() {
   var html = '';
   recs.forEach(function(r) {
     var vDef = VEHICLES_DEF.find(function(v){return v.id===r.vehicle;}) || {};
-    var amountStr = r.amount ? Number(r.amount).toLocaleString() + '원' : '';
-    var sub = [r.manager, amountStr, r.memo].filter(Boolean).join(' · ');
-    var dateDisp = carDate(r.date).replace(/-/g,'.');
+    var amountNum = parseFloat(r.amount);
+    var amountStr = (r.amount !== null && r.amount !== undefined && r.amount !== '' && !isNaN(amountNum)) ? amountNum.toLocaleString() + '원' : '';
+    // memo가 ISO 타임스탬프이면 표시 안 함 (GAS 컬럼 불일치 방어)
+    var memoStr = (r.memo && !/^\d{4}-\d{2}-\d{2}T/.test(String(r.memo))) ? String(r.memo) : '';
+    var sub = [r.manager, amountStr, memoStr].filter(Boolean).join(' · ');
+    var dateDisp = formatCarDate(r.date);
     var typeStr = r.type||'기타';
     var typeClass = (typeStr==='손세차'||typeStr==='자동세차') ? typeStr : '기타';
     html += '<div class="wash-record-item">'
@@ -3177,6 +3219,80 @@ if (tryAutoLogin()) {
 document.getElementById('login-pw').addEventListener('keydown', e => {
   if (e.key==='Enter') doLogin();
 });
+
+// ── 일정 상세보기 모달 ──
+function openEventDetail(id) {
+  var ev = state.events.find(function(e){ return e.id === id; });
+  if (!ev) return;
+  var ac = ACTORS[ev.actor] || {};
+  var t = ev.startTime ? (ev.endTime ? ev.startTime + ' ~ ' + ev.endTime : ev.startTime) : '';
+  var completedAt = ev.completedAt ? new Date(ev.completedAt).toLocaleString('ko-KR') : '';
+
+  // staff 상세 표시
+  var staffDetailHtml = '';
+  if (ev.staff) {
+    try {
+      var obj = JSON.parse(ev.staff);
+      if (typeof obj === 'object' && !Array.isArray(obj)) {
+        var rows = [];
+        STAFF_CATS.forEach(function(c) {
+          if (!obj[c] || !obj[c].length) return;
+          var lines = obj[c].map(function(item) {
+            var nm = typeof item === 'string' ? item : (item.name||'');
+            var st = typeof item === 'object' ? (item.startTime||'') : '';
+            var en = typeof item === 'object' ? (item.endTime||'') : '';
+            var hr = typeof item === 'object' ? (item.hours||'') : '';
+            var detail = [];
+            if (st && en) detail.push(st + '~' + en);
+            if (hr) detail.push(hr + 'h');
+            return nm + (detail.length ? ' (' + detail.join(', ') + ')' : '');
+          }).join('<br>');
+          rows.push('<div class="ev-detail-staff-cat">' + c + '</div><div class="ev-detail-staff-line">' + lines + '</div>');
+        });
+        staffDetailHtml = rows.join('<div style="margin-top:6px;"></div>');
+      }
+    } catch(e) {}
+  }
+
+  var rows = '';
+  if (t) rows += '<div class="ev-detail-row"><span class="ev-detail-icon">🕐</span><div><div class="ev-detail-label">시간</div><div class="ev-detail-val">' + t + '</div></div></div>';
+  if (ev.location) rows += '<div class="ev-detail-row"><span class="ev-detail-icon">📍</span><div><div class="ev-detail-label">장소</div><div class="ev-detail-val">' + ev.location + '</div></div></div>';
+  if (ev.vehicle) rows += '<div class="ev-detail-row"><span class="ev-detail-icon">🚗</span><div><div class="ev-detail-label">차량</div><div class="ev-detail-val">' + ev.vehicle + '</div></div></div>';
+  if (staffDetailHtml) rows += '<div class="ev-detail-row"><span class="ev-detail-icon">👥</span><div style="flex:1"><div class="ev-detail-label">근무자</div>' + staffDetailHtml + '</div></div>';
+  if (ev.memo) rows += '<div class="ev-detail-row"><span class="ev-detail-icon">📝</span><div><div class="ev-detail-label">메모</div><div class="ev-detail-val">' + ev.memo + '</div></div></div>';
+
+  var html = '<div class="ev-detail-bg" id="ev-detail-bg" onclick="closeEventDetail(event)">'
+    + '<div class="ev-detail-modal">'
+    + '<div class="ev-detail-header">'
+    + '<div>'
+    + '<div style="color:' + (ac.color||'#3b82f6') + ';font-size:12px;font-weight:700;margin-bottom:6px;">'
+    + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + (ac.color||'#3b82f6') + ';margin-right:5px;"></span>'
+    + ev.actor + ' &nbsp;<span style="color:#22c55e;font-size:11px;background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:10px;">✅ 완료</span>'
+    + '</div>'
+    + '<div style="font-size:17px;font-weight:700;color:var(--text);line-height:1.3;">' + (EVENT_TYPES[ev.type]||'') + ' ' + ev.title + '</div>'
+    + '</div>'
+    + '<button class="ev-detail-close" onclick="closeEventDetailBtn()">✕</button>'
+    + '</div>'
+    + (rows || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px 0;">상세 정보 없음</div>')
+    + (completedAt ? '<div class="ev-detail-footer">완료 처리: ' + completedAt + (ev.completedBy ? ' · ' + ev.completedBy : '') + '</div>' : '')
+    + '</div>'
+    + '</div>';
+
+  var el = document.createElement('div');
+  el.id = 'ev-detail-container';
+  el.innerHTML = html;
+  document.body.appendChild(el);
+}
+
+function closeEventDetail(e) {
+  if (e && e.target.id !== 'ev-detail-bg') return;
+  var el = document.getElementById('ev-detail-container');
+  if (el) el.remove();
+}
+function closeEventDetailBtn() {
+  var el = document.getElementById('ev-detail-container');
+  if (el) el.remove();
+}
 </script>
 </body>
 </html>
