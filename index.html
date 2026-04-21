@@ -525,9 +525,8 @@
   }
   .confirm-modal-warn {
     background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3);
-    border-radius:10px; padding:10px 13px; margin-bottom:18px;
+    border-radius:10px; padding:12px 14px; margin-bottom:18px;
     font-size:12px; color:var(--warn); line-height:1.6;
-    display:flex; gap:8px; align-items:flex-start;
   }
   .confirm-modal-warn-icon { font-size:15px; flex-shrink:0; margin-top:1px; }
   .confirm-modal-btns { display:flex; gap:8px; }
@@ -1500,8 +1499,12 @@ function completeEvent(id, ds) {
       <div class="confirm-modal-icon">✅</div>
       <div class="confirm-modal-title">일정을 완료 처리할까요?</div>
       <div class="confirm-modal-warn">
-        <span class="confirm-modal-warn-icon">⚠️</span>
-        <span>완료 처리 후에는 <b>관리자 계정만</b> 수정·삭제가 가능합니다.<br>일반 담당자는 열람만 할 수 있습니다.</span>
+        <div style="text-align:center;font-size:16px;margin-bottom:6px;">⚠️</div>
+        <div style="text-align:center;line-height:1.7;">
+          완료 처리 후에는<br>
+          <b>관리자 계정만</b> 수정·삭제가 가능하며<br>
+          일반 담당자는 열람만 가능합니다.
+        </div>
       </div>
       <div class="confirm-modal-btns">
         <button class="confirm-modal-cancel" id="cm-cancel">취소</button>
