@@ -2910,9 +2910,16 @@ function renderVehicleDashboard() {
   renderWashRecords();
 }
 
+// Google Sheets가 날짜를 ISO 타임스탬프로 반환하는 경우 처리
+function carDate(str) {
+  if (!str) return '';
+  return String(str).slice(0, 10); // "2026-04-21T15:00:00.000Z" → "2026-04-21"
+}
+
 function getDaysSince(dateStr) {
   if (!dateStr) return null;
-  var d = new Date(dateStr);
+  var clean = carDate(dateStr);
+  var d = new Date(clean + 'T12:00:00');
   var now = new Date();
   now.setHours(0,0,0,0); d.setHours(0,0,0,0);
   return Math.floor((now - d) / 86400000);
@@ -2934,7 +2941,7 @@ function renderVehicleCards() {
     var days = lastRec ? getDaysSince(lastRec.date) : null;
     var dc = getDaysClass(days);
     var daysLabel = days === null ? '기록없음' : days === 0 ? '오늘' : days + '일 전';
-    var lastInfo = lastRec ? lastRec.date.replace(/-/g,'.') + ' ' + (lastRec.type||'') : '기록없음';
+    var lastInfo = lastRec ? carDate(lastRec.date).replace(/-/g,'.') + ' ' + (lastRec.type||'') : '기록없음';
     html += '<div class="vehicle-card" onclick="setVehFilter(\'' + v.id + '\')">'
       + '<div class="vehicle-card-icon">' + v.icon + '</div>'
       + '<div class="vehicle-card-info">'
@@ -2970,7 +2977,9 @@ function renderWashRecords() {
   if (carState.filter !== 'all') {
     recs = recs.filter(function(r){ return r.vehicle === carState.filter; });
   }
-  recs.sort(function(a,b){ return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt); });
+  recs.sort(function(a,b){
+    return carDate(b.date).localeCompare(carDate(a.date)) || (b.createdAt||'').localeCompare(a.createdAt||'');
+  });
 
   if (!recs.length) {
     document.getElementById('wash-records-list').innerHTML = '<div style="text-align:center;color:var(--text3);padding:30px 0;font-size:13px;">기록이 없습니다</div>';
@@ -2982,26 +2991,27 @@ function renderWashRecords() {
     var vDef = VEHICLES_DEF.find(function(v){return v.id===r.vehicle;}) || {};
     var amountStr = r.amount ? Number(r.amount).toLocaleString() + '원' : '';
     var sub = [r.manager, amountStr, r.memo].filter(Boolean).join(' · ');
-    var canDel = isAdmin();
+    var dateDisp = carDate(r.date).replace(/-/g,'.');
+    var typeStr = r.type||'기타';
+    var typeClass = (typeStr==='손세차'||typeStr==='자동세차') ? typeStr : '기타';
     html += '<div class="wash-record-item">'
       + '<div class="wash-record-left">'
       + '<div class="wash-record-top">'
-      + '<span class="wash-record-date">' + (r.date||'').replace(/-/g,'.') + '</span>'
+      + '<span class="wash-record-date">' + dateDisp + '</span>'
       + '<span class="wash-record-veh">' + (vDef.icon||'🚗') + ' ' + (vDef.label||r.vehicle) + '</span>'
       + '</div>'
       + (sub ? '<div class="wash-record-bottom">' + sub + '</div>' : '')
       + '</div>'
-      + (function(){ var t=r.type||'기타'; var cls=(t==='손세차'||t==='자동세차')?t:'기타'; return '<span class="wash-badge wb-'+cls+'">'+t+'</span>'; }())
-      + (canDel ? '<button class="wash-del-btn" onclick="confirmDeleteWash(\'' + r.id + '\')" title="삭제">🗑</button>' : '')
+      + '<span class="wash-badge wb-' + typeClass + '">' + typeStr + '</span>'
+      + '<button class="wash-del-btn" onclick="openWashEdit(\'' + r.id + '\')" title="수정" style="color:var(--accent);">✏️</button>'
+      + '<button class="wash-del-btn" onclick="confirmDeleteWash(\'' + r.id + '\')" title="삭제">🗑</button>'
       + '</div>';
   });
   document.getElementById('wash-records-list').innerHTML = html;
 }
 
 // ── 폼 열기/닫기 ──
-function openWashForm(vehicleId) {
-  carState.editingId = null;
-  document.getElementById('wash-sheet-title').textContent = '세차 기록 추가';
+function _resetWashForm() {
   document.getElementById('wash-form').reset();
   document.getElementById('wash-vehicle-val').value = '';
   document.getElementById('wash-type-val').value = '';
@@ -3010,15 +3020,43 @@ function openWashForm(vehicleId) {
   document.getElementById('wash-amount').value = '';
   document.querySelectorAll('[data-wveh]').forEach(function(b){ b.classList.remove('selected'); });
   document.querySelectorAll('[data-wtype]').forEach(function(b){ b.classList.remove('selected'); });
-  // 날짜 기본값: 오늘
-  var today = new Date();
-  document.getElementById('wash-date').value = today.toISOString().slice(0,10);
-  // 차량 미리선택
+}
+
+function openWashForm(vehicleId) {
+  carState.editingId = null;
+  document.getElementById('wash-sheet-title').textContent = '세차 기록 추가';
+  document.getElementById('wash-submit-btn').textContent = '저장';
+  _resetWashForm();
+  document.getElementById('wash-date').value = new Date().toISOString().slice(0,10);
   if (vehicleId && vehicleId !== 'all') {
     selectWashVehicle(vehicleId);
   } else if (carState.filter !== 'all') {
     selectWashVehicle(carState.filter);
   }
+  showSheet('wash-sheet');
+}
+
+function openWashEdit(id) {
+  var r = carState.records.find(function(x){ return x.id === id; });
+  if (!r) return;
+  carState.editingId = id;
+  document.getElementById('wash-sheet-title').textContent = '세차 기록 수정';
+  document.getElementById('wash-submit-btn').textContent = '수정 완료';
+  _resetWashForm();
+  // 값 채우기
+  document.getElementById('wash-date').value = carDate(r.date);
+  selectWashVehicle(r.vehicle);
+  // 종류: 손세차/자동세차면 버튼, 아니면 기타+직접입력
+  var knownTypes = ['손세차','자동세차','기타'];
+  if (knownTypes.indexOf(r.type) >= 0) {
+    selectWashType(r.type);
+  } else {
+    selectWashType('기타');
+    document.getElementById('wash-type-custom').value = r.type;
+  }
+  document.getElementById('wash-manager').value = r.manager || '';
+  document.getElementById('wash-amount').value  = r.amount  || '';
+  document.getElementById('wash-memo').value    = r.memo    || '';
   showSheet('wash-sheet');
 }
 
@@ -3060,6 +3098,35 @@ async function submitWashForm(e) {
   var amountRaw = document.getElementById('wash-amount').value;
   var amount = amountRaw ? parseInt(amountRaw, 10) : null;
 
+  var btn = document.getElementById('wash-submit-btn');
+  btn.disabled = true;
+
+  if (carState.editingId) {
+    // 수정 모드
+    var idx = carState.records.findIndex(function(x){ return x.id === carState.editingId; });
+    if (idx >= 0) {
+      var updated = Object.assign({}, carState.records[idx], {
+        date:    date,
+        vehicle: veh,
+        type:    finalType,
+        manager: (document.getElementById('wash-manager').value||'').trim(),
+        amount:  amount,
+        memo:    (document.getElementById('wash-memo').value||'').trim()
+      });
+      carState.records[idx] = updated;
+      saveCarRecords();
+      renderVehicleDashboard();
+      closeWashSheet();
+      showToast('✅ 수정됐습니다');
+      // 서버에는 삭제 후 재추가
+      await deleteCarRecordServer(carState.editingId);
+      await pushCarRecord(updated);
+    }
+    btn.disabled = false; btn.textContent = '수정 완료';
+    return;
+  }
+
+  // 신규 추가 모드
   var record = {
     id:        'cr' + Date.now() + Math.random().toString(36).slice(2,6),
     date:      date,
@@ -3071,9 +3138,7 @@ async function submitWashForm(e) {
     createdAt: new Date().toISOString()
   };
 
-  var btn = document.getElementById('wash-submit-btn');
-  btn.disabled = true; btn.textContent = '저장 중...';
-
+  btn.textContent = '저장 중...';
   carState.records.push(record);
   saveCarRecords();
   renderVehicleDashboard();
@@ -3081,9 +3146,7 @@ async function submitWashForm(e) {
   showToast('✅ 세차 기록 저장됨');
 
   var ok = await pushCarRecord(record);
-  if (!ok && state.apiUrl) {
-    showToast('⚠️ 로컬 저장 완료 (서버 동기화 실패)');
-  }
+  if (!ok && state.apiUrl) showToast('⚠️ 로컬 저장 완료 (서버 동기화 실패)');
   btn.disabled = false; btn.textContent = '저장';
 }
 
