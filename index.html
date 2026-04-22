@@ -780,7 +780,7 @@
           <button type="button" class="type-select-btn" data-type="홍보" onclick="selectFormType('홍보')">📸<br>홍보</button>
           <button type="button" class="type-select-btn" data-type="광고" onclick="selectFormType('광고')">📢<br>광고</button>
           <button type="button" class="type-select-btn" data-type="기타" onclick="selectFormType('기타')">📌<br>기타</button>
-          <button type="button" class="type-select-btn" id="type-btn-private" data-type="비공개" onclick="selectFormType('비공개')" style="grid-column:span 4;border-color:rgba(239,68,68,0.3);color:#ef4444;">🔒 비공개 &nbsp;<span style="font-size:10px;color:var(--text3);font-weight:400;">관리자만 세부내용 열람</span></button>
+          <button type="button" class="type-select-btn" id="type-btn-private" data-type="비공개" onclick="selectFormType('비공개')" style="grid-column:span 4;border-color:rgba(239,68,68,0.3);color:#ef4444;">🔒 비공개 &nbsp;<span style="font-size:10px;color:var(--text3);font-weight:400;">배우·시간 공개 / 세부내용 비공개</span></button>
         </div>
         <input type="hidden" id="form-type" required>
       </div>
@@ -1416,7 +1416,8 @@ function renderCalendar() {
       const doneClass = ev.completed ? ' done' : '';
       const donePrefix = ev.completed ? '✅ ' : '';
       if (isPrivate) {
-        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 비공개</div>`;
+        const timePart = ev.startTime ? ev.startTime + ' ' : '';
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 [${ev.actor}] ${timePart}</div>`;
       } else {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
         const mainLabel = `${donePrefix}[${ev.actor}] ${timePart}${ev.title}`;
@@ -1467,8 +1468,8 @@ function renderList() {
       html+=`<div class="list-event-card${isDoneList?' completed':''}" onclick="openDaySheet('${ev.date}')" style="${isDoneList?'opacity:0.55':''}">
         <div class="list-event-bar" style="background:${isPrivate?'#64748b':isDoneList?'#22c55e':(ac.color||'#3b82f6')}"></div>
         <div class="list-event-content">
-          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`${isDoneList?'✅ ':''} [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}${ev.title}${ev.manager?' '+ev.manager:''}`}</div>
-          <div class="list-event-meta">${isPrivate?ev.actor:`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}${ev.location?' · 📍'+ev.location:''}`}</div>
+          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?`🔒 [${ev.actor}] ${ev.startTime?ev.startTime:''}${ev.startTime?' 비공개':'비공개'}`:`${isDoneList?'✅ ':''} [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}${ev.title}${ev.manager?' '+ev.manager:''}`}</div>
+          <div class="list-event-meta">${isPrivate?'세부내용 비공개':`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}${ev.location?' · 📍'+ev.location:''}`}</div>
         </div>
       </div>`;
     });
@@ -1534,13 +1535,15 @@ function renderDayBody(ds) {
     const isCreator = ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id;
 
     if (isPrivate) {
-      // 비공개: 작성자·관리자에게만 세부내용 표시
+      // 비공개: 배우·시작시간은 공개, 세부내용은 숨김
+      const ac2 = ACTORS[ev.actor] || {};
       html+=`<div class="event-card" style="border-left-color:#64748b;background:var(--bg3);">
         <div class="event-card-actor" style="color:#64748b;">
           <span style="width:7px;height:7px;border-radius:50%;background:#64748b;display:inline-block;"></span> ${ev.actor}
+          <span style="font-size:10px;background:rgba(100,116,139,0.2);color:#94a3b8;padding:1px 6px;border-radius:8px;margin-left:4px;">🔒 비공개</span>
         </div>
-        <div class="event-card-title" style="color:var(--text3);">🔒 비공개 일정</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px;">작성자 및 관리자만 열람할 수 있습니다</div>
+        ${t?`<div class="event-card-meta" style="margin-top:4px;"><span>🕐 ${t}</span></div>`:''}
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;">세부내용은 공개되지 않습니다</div>
       </div>`;
     } else {
       const isDone = !!ev.completed;
