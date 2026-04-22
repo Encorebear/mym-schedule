@@ -366,6 +366,16 @@
     background: var(--accent); border-color: var(--accent); color: white; font-weight: 600;
   }
 
+  /* ── 매니저 선택 버튼 ── */
+  .manager-btn {
+    background: var(--bg3); border: 1.5px solid var(--border);
+    border-radius: 8px; color: var(--text2); font-size: 13px;
+    padding: 7px 14px; cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .manager-btn.selected {
+    background: var(--accent); border-color: var(--accent); color: white; font-weight: 600;
+  }
+
   /* ── TOAST ── */
   .toast {
     position: fixed; bottom: 90px; left: 50%;
@@ -743,6 +753,17 @@
         <label class="form-label">배우</label>
         <div class="actor-select-grid" id="form-actor-grid"></div>
         <input type="hidden" id="form-actor" required>
+      </div>
+      <div class="form-section">
+        <label class="form-label">담당 매니저</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+          <button type="button" class="manager-btn" data-mgr="김종호" onclick="selectManager('김종호')">김종호</button>
+          <button type="button" class="manager-btn" data-mgr="강동현" onclick="selectManager('강동현')">강동현</button>
+          <button type="button" class="manager-btn" data-mgr="한호석" onclick="selectManager('한호석')">한호석</button>
+          <button type="button" class="manager-btn" data-mgr="기타" onclick="selectManager('기타')">기타 (직접입력)</button>
+        </div>
+        <input type="hidden" id="form-manager">
+        <input type="text" class="form-input" id="form-manager-other" placeholder="매니저 이름 직접 입력" style="display:none;margin-top:4px;">
       </div>
       <div class="form-section">
         <label class="form-label">날짜</label>
@@ -1388,8 +1409,15 @@ function renderCalendar() {
     events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      const prefix = isPrivate ? '' : `[${ev.actor}] `;
-      const label = isPrivate ? '🔒 비공개' : `${prefix}${EVENT_TYPES[ev.type]||''} ${ev.title}`;
+      // 달력 표기: [배우] 시작시간 제목 매니저 (이모지 없음)
+      let label;
+      if (isPrivate) {
+        label = '🔒 비공개';
+      } else {
+        const timePart = ev.startTime ? ev.startTime + ' ' : '';
+        const mgrPart = ev.manager ? ' ' + ev.manager : '';
+        label = `[${ev.actor}] ${timePart}${ev.title}${mgrPart}`;
+      }
       const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
       const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
       const dotShadow = (isPrivate || ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
@@ -1435,8 +1463,8 @@ function renderList() {
       html+=`<div class="list-event-card${isDoneList?' completed':''}" onclick="openDaySheet('${ev.date}')" style="${isDoneList?'opacity:0.55':''}">
         <div class="list-event-bar" style="background:${isPrivate?'#64748b':isDoneList?'#22c55e':(ac.color||'#3b82f6')}"></div>
         <div class="list-event-content">
-          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`${isDoneList?'✅ ':''} [${ev.actor}] ${EVENT_TYPES[ev.type]||''} ${ev.title}`}</div>
-          <div class="list-event-meta">${isPrivate?ev.actor:`${ev.actor}${t?' · '+t:''}${ev.location?' · 📍'+ev.location:''}`}</div>
+          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?'🔒 비공개 일정':`${isDoneList?'✅ ':''} [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}${ev.title}${ev.manager?' '+ev.manager:''}`}</div>
+          <div class="list-event-meta">${isPrivate?ev.actor:`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}${ev.location?' · 📍'+ev.location:''}`}</div>
         </div>
       </div>`;
     });
@@ -1527,6 +1555,7 @@ function renderDayBody(ds) {
         <div class="event-card-title">${EVENT_TYPES[ev.type]||''} ${ev.title}</div>
         <div class="event-card-meta">
           ${t?`<span>🕐 ${t}</span>`:''}
+          ${ev.manager?`<span>👤 ${ev.manager}</span>`:''}
           ${ev.location?`<span>📍 ${ev.location}</span>`:''}
         </div>
         ${isDone?`<div style="margin-top:6px;font-size:11px;color:#22c55e;opacity:0.75;">탭하면 전체 내용을 볼 수 있습니다 →</div>`:''}
@@ -1648,6 +1677,7 @@ function openAddSheet(ds) {
 
   document.getElementById('form-date').value=ds||dateKey(new Date());
   resetVehicleField();
+  resetManagerField();
   initStaffTags('');
   showSheet('form-sheet');
 }
@@ -1670,6 +1700,7 @@ function openEditSheet(id) {
   document.getElementById('form-end-time').value=ev.endTime||'';
   document.getElementById('form-location').value=ev.location||'';
   setVehicleField(ev.vehicle||'', '');
+  setManagerField(ev.manager||'');
   document.getElementById('form-memo').value=ev.memo||'';
   initStaffTags(ev.staff||'');
   showSheet('form-sheet');
@@ -1879,6 +1910,36 @@ function resetVehicleField() {
   document.getElementById('form-vehicle-other').value = '';
 }
 
+// ── 매니저 선택 ──
+const MANAGERS_PRESET = ['김종호', '강동현', '한호석'];
+
+function selectManager(val) {
+  document.querySelectorAll('.manager-btn').forEach(function(b) { b.classList.remove('selected'); });
+  var btn = document.querySelector('.manager-btn[data-mgr="' + val + '"]');
+  if (btn) btn.classList.add('selected');
+  document.getElementById('form-manager').value = val;
+  var otherEl = document.getElementById('form-manager-other');
+  otherEl.style.display = (val === '기타') ? '' : 'none';
+  if (val !== '기타') otherEl.value = '';
+}
+
+function setManagerField(val) {
+  if (!val) { resetManagerField(); return; }
+  if (MANAGERS_PRESET.includes(val)) {
+    selectManager(val);
+  } else {
+    selectManager('기타');
+    document.getElementById('form-manager-other').value = val;
+  }
+}
+
+function resetManagerField() {
+  document.querySelectorAll('.manager-btn').forEach(function(b) { b.classList.remove('selected'); });
+  document.getElementById('form-manager').value = '';
+  document.getElementById('form-manager-other').style.display = 'none';
+  document.getElementById('form-manager-other').value = '';
+}
+
 function formatStaffDisplay(staffJson) {
   if (!staffJson) return '';
   try {
@@ -1940,6 +2001,11 @@ function submitEventForm(e) {
   var _vehOther  = document.getElementById('form-vehicle-other').value.trim();
   var _vehicleFinal = _vehChoice === '기타' ? (_vehOther || '기타') : _vehChoice;
 
+  // resolve manager value
+  var _mgrChoice = document.getElementById('form-manager').value;
+  var _mgrOther  = (document.getElementById('form-manager-other').value||'').trim();
+  var _managerFinal = _mgrChoice === '기타' ? (_mgrOther || '기타') : _mgrChoice;
+
   const existing = editingId ? state.events.find(e=>e.id===editingId) : null;
   const ev={
     id: editingId||'ev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
@@ -1948,6 +2014,7 @@ function submitEventForm(e) {
     endTime:document.getElementById('form-end-time').value,
     location:document.getElementById('form-location').value.trim(),
     vehicle:_vehicleFinal,
+    manager:_managerFinal,
     staff:document.getElementById('form-staff').value,
     memo:document.getElementById('form-memo').value.trim(),
     createdBy: existing ? (existing.createdBy || state.currentUser.id) : state.currentUser.id,
