@@ -1409,24 +1409,25 @@ function renderCalendar() {
     events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      // 달력 표기: [배우] 시작시간 제목(축약) 매니저
-      let label;
-      if (isPrivate) {
-        label = '🔒 비공개';
-      } else {
-        const timePart = ev.startTime ? ev.startTime + ' ' : '';
-        const mgrPart = ev.manager ? ' ' + ev.manager : '';
-        // 매니저 있을 때 제목 최대 6자 축약, 없으면 최대 10자
-        const maxLen = ev.manager ? 6 : 10;
-        const titleShort = ev.title.length > maxLen ? ev.title.slice(0, maxLen) + '…' : ev.title;
-        label = `[${ev.actor}] ${timePart}${titleShort}${mgrPart}`;
-      }
+      // 달력 표기: [배우] 시간 제목 (왼쪽) | 매니저 (오른쪽 고정)
       const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
       const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
       const dotShadow = (isPrivate || ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
       const doneClass = ev.completed ? ' done' : '';
       const donePrefix = ev.completed ? '✅ ' : '';
-      dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">${donePrefix}${label}</div>`;
+      if (isPrivate) {
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 비공개</div>`;
+      } else {
+        const timePart = ev.startTime ? ev.startTime + ' ' : '';
+        const mainLabel = `${donePrefix}[${ev.actor}] ${timePart}${ev.title}`;
+        const mgrSpan = ev.manager
+          ? `<span style="flex-shrink:0;margin-left:3px;opacity:0.9;">${ev.manager}</span>`
+          : '';
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:2px;">` +
+          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${mainLabel}</span>` +
+          mgrSpan +
+          `</div>`;
+      }
     });
     const holidayHtml = holiday ? `<div class="holiday-label">${holiday}</div>` : '';
     html += `<div class="${cls}" onclick="openDaySheet('${key}')">
