@@ -1409,14 +1409,17 @@ function renderCalendar() {
     events.forEach(ev => {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
-      // 달력 표기: [배우] 시작시간 제목 매니저 (이모지 없음)
+      // 달력 표기: [배우] 시작시간 제목(축약) 매니저
       let label;
       if (isPrivate) {
         label = '🔒 비공개';
       } else {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
         const mgrPart = ev.manager ? ' ' + ev.manager : '';
-        label = `[${ev.actor}] ${timePart}${ev.title}${mgrPart}`;
+        // 매니저 있을 때 제목 최대 6자 축약, 없으면 최대 10자
+        const maxLen = ev.manager ? 6 : 10;
+        const titleShort = ev.title.length > maxLen ? ev.title.slice(0, maxLen) + '…' : ev.title;
+        label = `[${ev.actor}] ${timePart}${titleShort}${mgrPart}`;
       }
       const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
       const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
@@ -1709,7 +1712,7 @@ function openEditSheet(id) {
 // ═══════════════════════════════════════════════════
 //  STAFF TAG UI
 // ═══════════════════════════════════════════════════
-const STAFF_CATS = ['헤어','메이크업','스타일리스트','매니저','MYM','기타'];
+const STAFF_CATS = ['헤어','메이크업','스타일리스트','MYM','기타'];
 let staffData = {};
 
 function initStaffTags(existingStaff) {
