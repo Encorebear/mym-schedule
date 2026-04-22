@@ -1410,9 +1410,9 @@ function renderCalendar() {
       const ac = ACTORS[ev.actor] || {};
       const isPrivate = isHidden(ev);
       // 달력 표기: [배우] 시간 제목 (왼쪽) | 매니저 (오른쪽 고정)
-      const dotBg = isPrivate ? 'rgba(80,90,110,0.7)' : (ac.bg||'rgba(59,130,246,0.85)');
-      const dotColor = isPrivate ? '#cbd5e1' : (ac.textColor||'white');
-      const dotShadow = (isPrivate || ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
+      const dotBg = ac.bg||'rgba(59,130,246,0.85)';
+      const dotColor = ac.textColor||'white';
+      const dotShadow = (ac.textColor==='white' || !ac.textColor) ? 'text-shadow:0 1px 2px rgba(0,0,0,0.4);' : '';
       const doneClass = ev.completed ? ' done' : '';
       const donePrefix = ev.completed ? '✅ ' : '';
       if (isPrivate) {
@@ -1466,10 +1466,10 @@ function renderList() {
       const isPrivate = isHidden(ev);
       const isDoneList = !!ev.completed;
       html+=`<div class="list-event-card${isDoneList?' completed':''}" onclick="openDaySheet('${ev.date}')" style="${isDoneList?'opacity:0.55':''}">
-        <div class="list-event-bar" style="background:${isPrivate?'#64748b':isDoneList?'#22c55e':(ac.color||'#3b82f6')}"></div>
+        <div class="list-event-bar" style="background:${isDoneList?'#22c55e':(ac.color||'#3b82f6')}"></div>
         <div class="list-event-content">
-          <div class="list-event-title" style="${isPrivate?'color:var(--text3)':isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?`🔒 [${ev.actor}] ${ev.startTime?ev.startTime:''}${ev.startTime?' 비공개':'비공개'}`:`${isDoneList?'✅ ':''} [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}${ev.title}${ev.manager?' '+ev.manager:''}`}</div>
-          <div class="list-event-meta">${isPrivate?'세부내용 비공개':`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}${ev.location?' · 📍'+ev.location:''}`}</div>
+          <div class="list-event-title" style="${isDoneList?'text-decoration:line-through;color:var(--text3)':''}">${isPrivate?`🔒 [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}비공개${ev.manager?' · '+ev.manager:''}`:`${isDoneList?'✅ ':''} [${ev.actor}] ${ev.startTime?ev.startTime+' ':''}${ev.title}${ev.manager?' '+ev.manager:''}`}</div>
+          <div class="list-event-meta">${isPrivate?`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}`:`${ev.actor}${t?' · '+t:''}${ev.manager?' · 👤'+ev.manager:''}${ev.location?' · 📍'+ev.location:''}`}</div>
         </div>
       </div>`;
     });
@@ -1535,14 +1535,16 @@ function renderDayBody(ds) {
     const isCreator = ev.createdBy && state.currentUser && ev.createdBy === state.currentUser.id;
 
     if (isPrivate) {
-      // 비공개: 배우·시작시간은 공개, 세부내용은 숨김
-      const ac2 = ACTORS[ev.actor] || {};
-      html+=`<div class="event-card" style="border-left-color:#64748b;background:var(--bg3);">
-        <div class="event-card-actor" style="color:#64748b;">
-          <span style="width:7px;height:7px;border-radius:50%;background:#64748b;display:inline-block;"></span> ${ev.actor}
+      // 비공개: 배우·시작시간·매니저 공개, 세부내용 숨김
+      html+=`<div class="event-card" style="border-left-color:${ac.color||'#3b82f6'};background:var(--bg3);">
+        <div class="event-card-actor" style="color:${ac.color||'#3b82f6'}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${ac.color||'#3b82f6'};display:inline-block;"></span> ${ev.actor}
           <span style="font-size:10px;background:rgba(100,116,139,0.2);color:#94a3b8;padding:1px 6px;border-radius:8px;margin-left:4px;">🔒 비공개</span>
         </div>
-        ${t?`<div class="event-card-meta" style="margin-top:4px;"><span>🕐 ${t}</span></div>`:''}
+        <div class="event-card-meta" style="margin-top:4px;">
+          ${t?`<span>🕐 ${t}</span>`:''}
+          ${ev.manager?`<span>👤 ${ev.manager}</span>`:''}
+        </div>
         <div style="font-size:11px;color:var(--text3);margin-top:4px;">세부내용은 공개되지 않습니다</div>
       </div>`;
     } else {
