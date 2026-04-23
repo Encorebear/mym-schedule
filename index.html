@@ -2640,6 +2640,17 @@ async function generateExcel() {
     }, 0);
   }
 
+  // 달력용 텍스트 최대 길이 제한 (한글 2바이트 기준)
+  function _calTrunc(s, maxEff) {
+    var eff = 0, result = '';
+    for (var i = 0; i < s.length; i++) {
+      var ce = s.charCodeAt(i) > 255 ? 2 : 1;
+      if (eff + ce > maxEff) { result += '…'; break; }
+      eff += ce; result += s[i];
+    }
+    return result;
+  }
+
   _calMonths.forEach(function(ym) {
     var _yr = ym.year, _mo = ym.month;
     var _firstDay = new Date(_yr, _mo, 1);
@@ -2676,8 +2687,13 @@ async function generateExcel() {
         var _lines = _dEvts.map(function(ev) {
           var _s = '[' + ev.actor + '] ';
           if (ev.startTime) _s += ev.startTime + ' ';
-          if (ev.type === PRIVATE_TYPE && !_admin) { _s += '비공개'; }
-          else { _s += (ev.title||''); if (ev.location) _s += '(@' + ev.location + ')'; }
+          if (ev.type === PRIVATE_TYPE && !_admin) {
+            _s += '비공개';
+          } else {
+            // 제목 최대 10자(한글기준), 장소 최대 6자 축약
+            _s += _calTrunc(ev.title||'', 20);
+            if (ev.location) _s += '(@' + _calTrunc(ev.location, 10) + ')';
+          }
           if (ev.manager) _s += ev.manager;
           return _s;
         });
@@ -2841,7 +2857,13 @@ async function generateExcel() {
   });
 
   // ══ Sheet 3: 차량 운행 ═══════════════════════════════
-  var vehicleEvts = evts.filter(function(ev) { return ev.vehicle && ev.vehicle.trim(); });
+  var _curUserId = state.currentUser ? state.currentUser.id : '';
+  var vehicleEvts = evts.filter(function(ev) {
+    if (!ev.vehicle || !ev.vehicle.trim()) return false;
+    // 비공개: 관리자 또는 작성자 본인만 차량운행에 표시
+    if (ev.type === PRIVATE_TYPE && !_admin && ev.createdBy !== _curUserId) return false;
+    return true;
+  });
   var ws3 = wb.addWorksheet('차량운행', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws3.columns = [
     { width: 12 }, { width: 5 }, { width: 8 }, { width: 8 }, { width: 26 },
