@@ -2584,14 +2584,14 @@ async function generateExcel() {
   // ══ Sheet 1: 전체 일정 ══════════════════════════
   var ws1 = wb.addWorksheet('전체일정', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws1.columns = [
-    { width: 12 }, { width: 5  }, { width: 8  }, { width: 8  }, { width: 26 },
+    { width: 12 }, { width: 5  }, { width: 8  }, { width: 10 }, { width: 8  }, { width: 26 },
     { width: 8  }, { width: 8  }, { width: 16 }, { width: 12 }, { width: 12 },
     { width: 8  }, { width: 8  }, { width: 11 }, { width: 22 }
   ];
-  applyTitle(ws1, 'MYM 스케줄 — 전체일정', periodStr, 14);
-  var hdr1 = ws1.addRow(['날짜','요일','배우','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무(h)','메모']);
-  applyHeader(hdr1, 14);
-  ws1.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 14 } };
+  applyTitle(ws1, 'MYM 스케줄 — 전체일정', periodStr, 15);
+  var hdr1 = ws1.addRow(['날짜','요일','배우','담당자','유형','제목','일정시작','일정종료','장소','카테고리','스텝이름','출근','퇴근','근무(h)','메모']);
+  applyHeader(hdr1, 15);
+  ws1.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 15 } };
 
   var dataIdx1 = 0;
   evts.forEach(function(ev) {
@@ -2599,8 +2599,8 @@ async function generateExcel() {
     var isPrivateEv = (ev.type === PRIVATE_TYPE);
     // 비공개: 관리자는 전체, 일반유저는 시간·배우·매니저만
     if (isPrivateEv && !_admin) {
-      var row = ws1.addRow([ev.date, DOW[d.getDay()], ev.actor, '비공개',
-        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', '', '', '', ev.manager||'']);
+      var row = ws1.addRow([ev.date, DOW[d.getDay()], ev.actor, ev.manager||'', '비공개',
+        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', '', '', '', '']);
       row.height = 17;
       row.eachCell({ includeEmpty: true }, function(cell) {
         cell.border    = BORDER_ALL;
@@ -2610,7 +2610,7 @@ async function generateExcel() {
       dataIdx1++;
       return;
     }
-    var base = [ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+    var base = [ev.date, DOW[d.getDay()], ev.actor, ev.manager||'', ev.type, ev.title,
                 ev.startTime||'', ev.endTime||'', ev.location||''];
     var hasStaff = false;
     if (!isPrivateEv && ev.staff) {
@@ -2644,22 +2644,22 @@ async function generateExcel() {
   // ══ Sheet 2: 일정별 요약 (일정 1행, 스텝 집계) ═════════════════
   var ws2 = wb.addWorksheet('일정별요약', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws2.columns = [
-    { width: 12 }, { width: 5 }, { width: 8 }, { width: 8 }, { width: 26 },
+    { width: 12 }, { width: 5 }, { width: 8 }, { width: 10 }, { width: 8 }, { width: 26 },
     { width: 8  }, { width: 8 }, { width: 16 }, { width: 10 }, { width: 36 },
     { width: 22 }
   ];
-  applyTitle(ws2, 'MYM 스케줄 — 일정별 요약', periodStr, 11);
-  var hdr2 = ws2.addRow(['날짜','요일','배우','유형','제목','시작','종료','장소','동행인원','동행/스텝','메모']);
-  applyHeader(hdr2, 11);
-  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
+  applyTitle(ws2, 'MYM 스케줄 — 일정별 요약', periodStr, 12);
+  var hdr2 = ws2.addRow(['날짜','요일','배우','담당자','유형','제목','시작','종료','장소','동행인원','동행/스텝','메모']);
+  applyHeader(hdr2, 12);
+  ws2.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
 
   var dataIdx2 = 0;
   evts.forEach(function(ev) {
     var d = new Date(ev.date);
     var isPrivateEv = (ev.type === PRIVATE_TYPE);
     if (isPrivateEv && !_admin) {
-      var row = ws2.addRow([ev.date, DOW[d.getDay()], ev.actor, '비공개',
-        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', ev.manager||'']);
+      var row = ws2.addRow([ev.date, DOW[d.getDay()], ev.actor, ev.manager||'', '비공개',
+        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', '']);
       row.height = 17;
       row.eachCell({ includeEmpty: true }, function(cell) {
         cell.border = BORDER_ALL; cell.alignment = { vertical: 'middle' };
@@ -2684,7 +2684,7 @@ async function generateExcel() {
       } catch(e) {}
     }
     var row = ws2.addRow([
-      ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
+      ev.date, DOW[d.getDay()], ev.actor, ev.manager||'', ev.type, ev.title,
       ev.startTime||'', ev.endTime||'', ev.location||'',
       staffCount || '', staffNames.join(', '),
       ev.memo||''
