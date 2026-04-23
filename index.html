@@ -2630,25 +2630,15 @@ async function generateExcel() {
   _calSc.alignment = { horizontal: 'center', vertical: 'middle' };
   wsCal.getRow(2).height = 16;
 
-  // 텍스트 줄 수 추정 (한글=2바이트, ASCII=1바이트, 열 너비 기준)
+  // 텍스트 시각적 줄 수 추정 (한글=2, ASCII=1, 빈 줄=1)
   function _visLines(text, charsPerLine) {
     if (!text) return 0;
     return text.split('\n').reduce(function(sum, line) {
+      if (line === '') return sum + 1; // 빈 줄도 1행
       var eff = 0;
       for (var i = 0; i < line.length; i++) eff += line.charCodeAt(i) > 255 ? 2 : 1;
       return sum + Math.max(1, Math.ceil(eff / charsPerLine));
     }, 0);
-  }
-
-  // 달력용 텍스트 최대 길이 제한 (한글 2바이트 기준)
-  function _calTrunc(s, maxEff) {
-    var eff = 0, result = '';
-    for (var i = 0; i < s.length; i++) {
-      var ce = s.charCodeAt(i) > 255 ? 2 : 1;
-      if (eff + ce > maxEff) { result += '…'; break; }
-      eff += ce; result += s[i];
-    }
-    return result;
   }
 
   _calMonths.forEach(function(ym) {
@@ -2690,14 +2680,14 @@ async function generateExcel() {
           if (ev.type === PRIVATE_TYPE && !_admin) {
             _s += '비공개';
           } else {
-            // 제목 최대 10자(한글기준), 장소 최대 6자 축약
-            _s += _calTrunc(ev.title||'', 20);
-            if (ev.location) _s += '(@' + _calTrunc(ev.location, 10) + ')';
+            _s += (ev.title||'');
+            if (ev.location) _s += '(@' + ev.location + ')';
           }
           if (ev.manager) _s += ev.manager;
           return _s;
         });
-        _eVals.push(_lines.join('\n'));
+        // 이벤트 사이 빈 줄로 구분 (여러 배우/일정 시각적 분리)
+        _eVals.push(_lines.join('\n\n'));
         if (_lines.length > _maxL) _maxL = _lines.length;
         _cur.setDate(_cur.getDate() + 1);
       }
@@ -2716,11 +2706,11 @@ async function generateExcel() {
       // 이벤트 행 — 셀별 실제 줄 수 계산 (한글 2바이트, 열너비 20자 기준)
       var _maxVisL = 1;
       for (var _vi = 1; _vi <= 7; _vi++) {
-        var _vl = _visLines(_eVals[_vi] || '', 20);
+        var _vl = _visLines(_eVals[_vi] || '', 19); // 열 너비 21 기준 보수적 추정
         if (_vl > _maxVisL) _maxVisL = _vl;
       }
       var _er = wsCal.addRow(_eVals);
-      _er.height = Math.max(24, _maxVisL * 14 + 6);
+      _er.height = Math.max(26, _maxVisL * 13 + 8);
       _er.eachCell({ includeEmpty: true }, function(cell, ci) {
         if (ci === 1) return;
         cell.font = { size: 8 }; cell.border = BORDER_ALL;
