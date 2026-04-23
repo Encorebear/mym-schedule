@@ -2509,12 +2509,14 @@ async function generateExcel() {
   if (staffFilter)            periodStr += ' · ' + staffFilter;
 
   // ── 이벤트 필터링 ──
+  const _admin = isAdmin();
   let evts = state.events.filter(ev => {
-    if (ev.type === PRIVATE_TYPE) return false;
     const d = new Date(ev.date);
     if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
     if (period === 'year'  &&  d.getFullYear() !== year)                             return false;
     if (actorFilter !== 'all' && ev.actor !== actorFilter)                           return false;
+    // 비공개: 관리자는 포함, 일반유저도 포함(내용 마스킹)
+    if (ev.type === PRIVATE_TYPE && staffFilter) return false; // 스텝필터 시 비공개 제외
     if (staffFilter) {
       if (!ev.staff) return false;
       try {
@@ -2594,10 +2596,24 @@ async function generateExcel() {
   var dataIdx1 = 0;
   evts.forEach(function(ev) {
     var d = new Date(ev.date);
+    var isPrivateEv = (ev.type === PRIVATE_TYPE);
+    // 비공개: 관리자는 전체, 일반유저는 시간·배우·매니저만
+    if (isPrivateEv && !_admin) {
+      var row = ws1.addRow([ev.date, DOW[d.getDay()], ev.actor, '비공개',
+        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', '', '', '', ev.manager||'']);
+      row.height = 17;
+      row.eachCell({ includeEmpty: true }, function(cell) {
+        cell.border    = BORDER_ALL;
+        cell.alignment = { vertical: 'middle' };
+        cell.font      = { italic: true, color: { argb: 'FF888888' } };
+      });
+      dataIdx1++;
+      return;
+    }
     var base = [ev.date, DOW[d.getDay()], ev.actor, ev.type, ev.title,
                 ev.startTime||'', ev.endTime||'', ev.location||''];
     var hasStaff = false;
-    if (ev.staff) {
+    if (!isPrivateEv && ev.staff) {
       try {
         var obj = JSON.parse(ev.staff);
         STAFF_CATS.forEach(function(c) {
@@ -2608,7 +2624,6 @@ async function generateExcel() {
             var indivHr = typeof item === 'string' ? '' : (item.hours !== '' && item.hours != null ? parseFloat(item.hours) : '');
             var staffMemo = typeof item === 'string' ? '' : (item.memo||'');
             if (!nm) return;
-            // 개별 시간 없으면 일정 전체 시간 기본값 사용
             var st = indivSt || ev.startTime || '';
             var en = indivEn || ev.endTime   || '';
             var hr = indivHr !== '' ? indivHr : (indivSt ? '' : (ev.startTime && ev.endTime ? calcTimeHoursStr(ev.startTime, ev.endTime) : ''));
@@ -2641,8 +2656,19 @@ async function generateExcel() {
   var dataIdx2 = 0;
   evts.forEach(function(ev) {
     var d = new Date(ev.date);
+    var isPrivateEv = (ev.type === PRIVATE_TYPE);
+    if (isPrivateEv && !_admin) {
+      var row = ws2.addRow([ev.date, DOW[d.getDay()], ev.actor, '비공개',
+        '(비공개)', ev.startTime||'', ev.endTime||'', '', '', '', ev.manager||'']);
+      row.height = 17;
+      row.eachCell({ includeEmpty: true }, function(cell) {
+        cell.border = BORDER_ALL; cell.alignment = { vertical: 'middle' };
+        cell.font = { italic: true, color: { argb: 'FF888888' } };
+      });
+      dataIdx2++; return;
+    }
     var staffNames = [], totalHours = 0, staffCount = 0;
-    if (ev.staff) {
+    if (!isPrivateEv && ev.staff) {
       try {
         var obj = JSON.parse(ev.staff);
         STAFF_CATS.forEach(function(c) {
@@ -2693,6 +2719,54 @@ async function generateExcel() {
     var ec = ws3.getCell(4, 1);
     ec.font      = { italic: true, color: { argb: 'FF888888' } };
     ec.alignment = { horizontal: 'center', vertical: 'middle' };
+  }
+
+  // ══ Sheet 4: 세차이력 ═══════════════════════════════
+  var ws4 = wb.addWorksheet('세차이력', { views: [{ state: 'frozen', ySplit: 3 }] });
+  ws4.columns = [
+    { width: 16 }, { width: 5 }, { width: 10 }, { width: 14 },
+    { width: 12 }, { width: 10 }, { width: 12 }, { width: 22 }
+  ];
+  applyTitle(ws4, 'MYM 스케줄 — 세차이력', periodStr, 8);
+  var hdr4 = ws4.addRow(['날짜','요일','차량명','번호판','세차종류','담당자','금액','메모']);
+  applyHeader(hdr4, 8);
+  ws4.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 8 } };
+
+  // 세차기록 기간 필터
+  var washRecs = (carState.records || []).filter(function(r) {
+    var d10 = carDate(r.date);
+    if (!d10) return true; // 날짜 없으면 포함
+    var d = new Date(d10 + 'T12:00:00');
+    if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
+    if (period === 'year'  &&  d.getFullYear() !== year) return false;
+    return true;
+  }).sort(function(a,b){ return carDate(b.date).localeCompare(carDate(a.date)); });
+
+  var dataIdx4 = 0;
+  washRecs.forEach(function(r) {
+    var d10 = carDate(r.date);
+    var d = d10 ? new Date(d10 + 'T12:00:00') : null;
+    var vDef = (typeof VEHICLES_DEF !== 'undefined' ? VEHICLES_DEF : []).find(function(v){ return v.id === r.vehicle; }) || {};
+    var amountNum = parseFloat(r.amount);
+    var amountStr = (!isNaN(amountNum) && amountNum > 0) ? amountNum.toLocaleString() + '원' : '';
+    var row = ws4.addRow([
+      d10 || r.date || '',
+      d ? DOW[d.getDay()] : '',
+      vDef.label || r.vehicle || '',
+      r.vehicle || '',
+      r.type || '',
+      r.manager || '',
+      amountStr,
+      (r.memo && !/^\d{4}-\d{2}-\d{2}T/.test(String(r.memo))) ? r.memo : ''
+    ]);
+    applyDataRow(row, dataIdx4++);
+  });
+  if (washRecs.length === 0) {
+    var emptyRow4 = ws4.addRow(['해당 기간 세차 기록 없음']);
+    ws4.mergeCells(4, 1, 4, 8);
+    var ec4 = ws4.getCell(4, 1);
+    ec4.font = { italic: true, color: { argb: 'FF888888' } };
+    ec4.alignment = { horizontal: 'center', vertical: 'middle' };
   }
 
   // ── 파일명 ──
