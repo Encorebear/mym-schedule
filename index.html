@@ -2583,11 +2583,6 @@ async function generateExcel() {
 
   // ══ Sheet 0: 월별 달력 (맨 앞) ═══════════════════════════
   var wsCal = wb.addWorksheet('월별달력', { views: [{ state: 'frozen', ySplit: 2 }] });
-  wsCal.columns = [
-    { width: 4 },
-    { width: 21 }, { width: 21 }, { width: 21 }, { width: 21 },
-    { width: 21 }, { width: 21 }, { width: 21 }
-  ];
 
   // 표시할 월 목록
   var _calMonths = [];
@@ -2612,6 +2607,33 @@ async function generateExcel() {
     if (!_evByDate[ev.date]) _evByDate[ev.date] = [];
     _evByDate[ev.date].push(ev);
   });
+
+  // ── 이벤트 텍스트 최대 길이 기반 열 너비 자동 계산 ──
+  // 요일별(0=월~6=일) 최대 유효 길이 추적
+  var _maxEffPerDow = [0, 0, 0, 0, 0, 0, 0];
+  evts.forEach(function(ev) {
+    var _d2 = new Date(ev.date);
+    var _dow2 = _d2.getDay(); // 0=일
+    var _pos2 = _dow2 === 0 ? 6 : _dow2 - 1; // 0=월~6=일
+    var _s2 = '[' + ev.actor + '] ';
+    if (ev.startTime) _s2 += ev.startTime + ' ';
+    if (ev.type === PRIVATE_TYPE && !_admin) { _s2 += '비공개'; }
+    else { _s2 += (ev.title||''); if (ev.location) _s2 += '(@' + ev.location + ')'; }
+    if (ev.manager) _s2 += ev.manager;
+    var _eff2 = 0;
+    for (var _i2 = 0; _i2 < _s2.length; _i2++) _eff2 += _s2.charCodeAt(_i2) > 255 ? 2 : 1;
+    if (_eff2 > _maxEffPerDow[_pos2]) _maxEffPerDow[_pos2] = _eff2;
+  });
+  // eff → Excel 열 너비 변환 (한글기준 1eff ≈ 0.78 width, min 20, max 38)
+  var _calColWidths = [{ width: 4 }];
+  for (var _ci2 = 0; _ci2 < 7; _ci2++) {
+    var _cw = Math.min(38, Math.max(20, Math.ceil(_maxEffPerDow[_ci2] * 0.78) + 2));
+    _calColWidths.push({ width: _cw });
+  }
+  wsCal.columns = _calColWidths;
+  // charsPerLine: 열 너비 → 유효 글자수 역산 (넉넉히 -1 보정)
+  var _avgColW = _calColWidths.slice(1).reduce(function(s,c){return s+c.width;},0) / 7;
+  var _cpl = Math.floor(_avgColW / 0.78) - 1;
 
   // 타이틀
   wsCal.addRow(['월별 스케줄', '', '', '', '', '', '', '']);
@@ -2706,7 +2728,7 @@ async function generateExcel() {
       // 이벤트 행 — 셀별 실제 줄 수 계산 (한글 2바이트, 열너비 20자 기준)
       var _maxVisL = 1;
       for (var _vi = 1; _vi <= 7; _vi++) {
-        var _vl = _visLines(_eVals[_vi] || '', 19); // 열 너비 21 기준 보수적 추정
+        var _vl = _visLines(_eVals[_vi] || '', _cpl);
         if (_vl > _maxVisL) _maxVisL = _vl;
       }
       var _er = wsCal.addRow(_eVals);
