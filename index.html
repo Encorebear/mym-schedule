@@ -366,6 +366,16 @@
     background: var(--accent); border-color: var(--accent); color: white; font-weight: 600;
   }
 
+  /* ── 엑셀 내보내기 멀티셀렉트 버튼 ── */
+  .export-toggle-btn {
+    background: var(--bg3); border: 1.5px solid var(--border);
+    border-radius: 7px; color: var(--text2); font-size: 12px;
+    padding: 5px 8px; cursor: pointer; font-family: inherit; transition: all .15s;
+  }
+  .export-toggle-btn.selected {
+    background: var(--accent); border-color: var(--accent); color: white; font-weight: 600;
+  }
+
   /* ── 매니저 선택 버튼 ── */
   .manager-btn {
     background: var(--bg3); border: 1.5px solid var(--border);
@@ -898,24 +908,27 @@
       <select class="form-select" id="export-year"></select>
     </div>
     <div id="export-month-wrap" class="form-section">
-      <label class="form-label">월</label>
-      <select class="form-select" id="export-month">
-        <option value="0">1월</option><option value="1">2월</option>
-        <option value="2">3월</option><option value="3">4월</option>
-        <option value="4">5월</option><option value="5">6월</option>
-        <option value="6">7월</option><option value="7">8월</option>
-        <option value="8">9월</option><option value="9">10월</option>
-        <option value="10">11월</option><option value="11">12월</option>
-      </select>
+      <label class="form-label">월 선택 <span style="font-size:11px;color:var(--text3);font-weight:400;">(복수 선택 가능)</span></label>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;" id="export-month-grid">
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="0"  onclick="toggleExportMonth(0)">1월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="1"  onclick="toggleExportMonth(1)">2월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="2"  onclick="toggleExportMonth(2)">3월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="3"  onclick="toggleExportMonth(3)">4월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="4"  onclick="toggleExportMonth(4)">5월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="5"  onclick="toggleExportMonth(5)">6월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="6"  onclick="toggleExportMonth(6)">7월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="7"  onclick="toggleExportMonth(7)">8월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="8"  onclick="toggleExportMonth(8)">9월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="9"  onclick="toggleExportMonth(9)">10월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="10" onclick="toggleExportMonth(10)">11월</button>
+        <button type="button" class="export-toggle-btn export-month-btn" data-m="11" onclick="toggleExportMonth(11)">12월</button>
+      </div>
     </div>
     <div class="form-section">
-      <label class="form-label">배우 필터</label>
-      <select class="form-select" id="export-actor">
-        <option value="all">전체 배우</option>
-        <option value="LMH">LMH</option><option value="LSJ">LSJ</option>
-        <option value="KM">KM</option><option value="KMJ">KMJ</option>
-        <option value="LSH">LSH</option><option value="PJS">PJS</option>
-      </select>
+      <label class="form-label">배우 <span style="font-size:11px;color:var(--text3);font-weight:400;">(복수 선택 가능)</span></label>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;" id="export-actor-grid">
+        <button type="button" class="export-toggle-btn export-actor-btn selected" data-a="all" onclick="toggleExportActor('all')">전체</button>
+      </div>
     </div>
     <div class="form-section">
       <label class="form-label">스텝 이름 필터 <span style="font-size:11px;color:var(--text3);font-weight:400;">(입력 시 해당 스텝 포함 일정만)</span></label>
@@ -2446,6 +2459,33 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════════
 //  EXCEL EXPORT
 // ═══════════════════════════════════════════════════
+// ── 내보내기 멀티셀렉트 헬퍼 ──
+function toggleExportMonth(m) {
+  var btn = document.querySelector('.export-month-btn[data-m="'+m+'"]');
+  if (btn) btn.classList.toggle('selected');
+}
+function toggleExportActor(a) {
+  var allBtns = document.querySelectorAll('.export-actor-btn:not([data-a="all"])');
+  var allBtn  = document.querySelector('.export-actor-btn[data-a="all"]');
+  if (a === 'all') {
+    var allSel = allBtn && allBtn.classList.contains('selected');
+    allBtns.forEach(function(b){ allSel ? b.classList.remove('selected') : b.classList.add('selected'); });
+    if (allBtn) allBtn.classList.toggle('selected');
+  } else {
+    var btn = document.querySelector('.export-actor-btn[data-a="'+a+'"]');
+    if (btn) btn.classList.toggle('selected');
+    var allSelected = Array.from(allBtns).every(function(b){ return b.classList.contains('selected'); });
+    if (allBtn) allBtn.classList.toggle('selected', allSelected);
+  }
+}
+function getSelectedExportMonths() {
+  return Array.from(document.querySelectorAll('.export-month-btn.selected')).map(function(b){ return parseInt(b.dataset.m); });
+}
+function getSelectedExportActors() {
+  var sel = Array.from(document.querySelectorAll('.export-actor-btn:not([data-a="all"]).selected')).map(function(b){ return b.dataset.a; });
+  return (sel.length === 0 || sel.length === ACTOR_LIST.length) ? null : sel;
+}
+
 function openExportSheet() {
   // 연도 목록 자동 생성
   const years = [...new Set(state.events.map(e => new Date(e.date).getFullYear()))];
@@ -2457,9 +2497,27 @@ function openExportSheet() {
   yearSel.innerHTML = years.map(y =>
     `<option value="${y}" ${y===state.year?'selected':''}>${y}년</option>`
   ).join('');
-  document.getElementById('export-month').value = state.month;
-  document.getElementById('export-actor').value =
-    (state.selectedActor !== 'all' && ACTOR_LIST.includes(state.selectedActor)) ? state.selectedActor : 'all';
+
+  // 월 버튼 - 현재 월만 선택
+  document.querySelectorAll('.export-month-btn').forEach(function(b){
+    b.classList.toggle('selected', parseInt(b.dataset.m) === state.month);
+  });
+
+  // 배우 버튼 동적 생성
+  var actorGrid = document.getElementById('export-actor-grid');
+  actorGrid.innerHTML = '<button type="button" class="export-toggle-btn export-actor-btn selected" data-a="all" onclick="toggleExportActor(\'all\')">전체</button>';
+  ACTOR_LIST.forEach(function(a) {
+    var ac = ACTORS[a] || {};
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'export-toggle-btn export-actor-btn selected';
+    btn.dataset.a = a;
+    btn.textContent = a;
+    btn.style.borderColor = ac.color || '';
+    btn.onclick = function(){ toggleExportActor(a); };
+    actorGrid.appendChild(btn);
+  });
+
   document.getElementById('export-period').value = 'month';
   document.getElementById('export-month-wrap').style.display = '';
   document.getElementById('export-year-wrap').style.display = '';
@@ -2494,27 +2552,39 @@ async function generateExcel() {
 
   const period      = document.getElementById('export-period').value;
   const year        = parseInt(document.getElementById('export-year')?.value || new Date().getFullYear());
-  const month       = parseInt(document.getElementById('export-month').value);
-  const actorFilter = document.getElementById('export-actor').value;
+  const selectedMonths = getSelectedExportMonths(); // 선택된 월 배열 (0-11)
+  const selectedActors = getSelectedExportActors(); // 선택된 배우 배열 or null(전체)
   const staffFilter = document.getElementById('export-staff-name').value.trim().toLowerCase();
   const DOW = ['일','월','화','수','목','금','토'];
   const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
+  // 월 미선택 체크
+  if (period === 'month' && selectedMonths.length === 0) {
+    showToast('⚠️ 월을 1개 이상 선택해주세요');
+    statusEl.textContent = '';
+    return;
+  }
+
   // ── 기간 표시 문자열 ──
   let periodStr = '';
-  if (period === 'month')     periodStr = year + '년 ' + MONTHS[month];
-  else if (period === 'year') periodStr = year + '년';
-  else                        periodStr = '전체 기간';
-  if (actorFilter !== 'all')  periodStr += ' · ' + actorFilter;
-  if (staffFilter)            periodStr += ' · ' + staffFilter;
+  if (period === 'month') {
+    const mStr = selectedMonths.sort((a,b)=>a-b).map(m=>MONTHS[m]).join(', ');
+    periodStr = year + '년 ' + mStr;
+  } else if (period === 'year') periodStr = year + '년';
+  else                          periodStr = '전체 기간';
+  if (selectedActors)  periodStr += ' · ' + selectedActors.join(', ');
+  if (staffFilter)     periodStr += ' · ' + staffFilter;
 
   // ── 이벤트 필터링 ──
   const _admin = isAdmin();
   let evts = state.events.filter(ev => {
     const d = new Date(ev.date);
-    if (period === 'month' && (d.getFullYear() !== year || d.getMonth() !== month)) return false;
-    if (period === 'year'  &&  d.getFullYear() !== year)                             return false;
-    if (actorFilter !== 'all' && ev.actor !== actorFilter)                           return false;
+    if (period === 'month') {
+      if (d.getFullYear() !== year) return false;
+      if (!selectedMonths.includes(d.getMonth())) return false;
+    }
+    if (period === 'year' && d.getFullYear() !== year) return false;
+    if (selectedActors && !selectedActors.includes(ev.actor)) return false;
     // 비공개: 관리자는 포함, 일반유저도 포함(내용 마스킹)
     if (ev.type === PRIVATE_TYPE && staffFilter) return false; // 스텝필터 시 비공개 제외
     if (staffFilter) {
@@ -2587,7 +2657,7 @@ async function generateExcel() {
   // 표시할 월 목록
   var _calMonths = [];
   if (period === 'month') {
-    _calMonths = [{year: year, month: month}];
+    _calMonths = selectedMonths.sort(function(a,b){return a-b;}).map(function(m){ return {year: year, month: m}; });
   } else if (period === 'year') {
     for (var _cm = 0; _cm < 12; _cm++) _calMonths.push({year: year, month: _cm});
   } else {
