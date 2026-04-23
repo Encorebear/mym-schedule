@@ -3023,8 +3023,8 @@ async function generateExcel() {
 
   // ── 파일명 ──
   var fname = 'MYM스케줄';
-  if (actorFilter !== 'all')  fname += '_' + actorFilter;
-  if (period === 'month')     fname += '_' + year + '년' + (month + 1) + '월';
+  if (selectedActors)         fname += '_' + selectedActors.join(',');
+  if (period === 'month')     fname += '_' + year + '년' + selectedMonths.sort((a,b)=>a-b).map(m=>m+1+'월').join(',');
   else if (period === 'year') fname += '_' + year + '년';
   else                        fname += '_전체';
   if (staffFilter)            fname += '_' + staffFilter;
