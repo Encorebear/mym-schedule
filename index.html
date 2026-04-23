@@ -1080,15 +1080,8 @@ const DEFAULT_API   = '/.netlify/functions/api'; // 프록시를 통해 GAS URL 
 // role: 'admin' | 'actor' | 'viewer'
 // actors: array of actor names (empty = all for admin)
 // canEdit: bool
-const DEFAULT_USERS = [
-  { id:'admin',   pw:'mym2024', role:'admin',  actors:[], canEdit:true,  label:'관리자' },
-  { id:'minho',   pw:'minho1',  role:'actor',  actors:['LMH'], canEdit:true,  label:'LMH 담당' },
-  { id:'sujeong', pw:'sj1234',  role:'actor',  actors:['LSJ'], canEdit:true,  label:'LSJ 담당' },
-  { id:'min',     pw:'min123',  role:'actor',  actors:['KM'],   canEdit:true,  label:'KM 담당' },
-  { id:'minji',   pw:'mj1234',  role:'actor',  actors:['KMJ'], canEdit:true,  label:'KMJ 담당' },
-  { id:'seohyun', pw:'sh1234',  role:'actor',  actors:['LSH'], canEdit:true,  label:'LSH 담당' },
-  { id:'junseo',  pw:'js1234',  role:'actor',  actors:['PJS'], canEdit:true,  label:'PJS 담당' }
-];
+// 기본 유저 목록 — 비밀번호 없음 (서버에서만 검증)
+const DEFAULT_USERS = [];
 
 // ═══════════════════════════════════════════════════
 //  STATE
@@ -1101,6 +1094,7 @@ let state = {
   events: [],
   users: [],
   currentUser: null,
+  sessionToken: null,
   apiUrl: '/.netlify/functions/api'
 };
 
@@ -1121,27 +1115,34 @@ function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.use
 // 유저 정보 서버 동기화
 async function pushUsersToServer() {
   if (!state.apiUrl) return;
+  // API 요청 헬퍼 (sessionToken 자동 포함)
+  function _tok() { return state.sessionToken || ''; }
+  function _apiGetUrl(action, extra) {
+    return state.apiUrl + '?action=' + action + '&sessionToken=' + encodeURIComponent(_tok()) + (extra||'') + '&t=' + Date.now();
+  }
+  function _apiPostBody(obj) {
+    return JSON.stringify(Object.assign({ sessionToken: _tok() }, obj));
+  }
+
   try {
     await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'saveUsers', key: API_KEY, users: state.users })
+      body: _apiPostBody({ action: 'saveUsers', users: state.users })
     });
   } catch(e) {}
 }
 async function loadUsersFromServer() {
   if (!state.apiUrl) return;
   try {
-    const res = await fetch(state.apiUrl + '?action=loadUsers&key=' + API_KEY + '&t=' + Date.now());
+    const tok = encodeURIComponent(state.sessionToken || '');
+    const res = await fetch(state.apiUrl + '?action=loadUsers&sessionToken=' + tok + '&t=' + Date.now());
     const data = JSON.parse(await res.text());
+    if (data.error === 'unauthorized') { logout(); return; }
     if (Array.isArray(data.users) && data.users.length > 0) {
-      state.users = data.users;
+      // 비밀번호 제거 후 저장 (서버에서 이미 제거하지만 방어적으로 처리)
+      state.users = data.users.map(function(u){ const c={...u}; delete c.pw; return c; });
       localStorage.setItem(USERS_KEY, JSON.stringify(state.users));
-      // 현재 로그인된 유저 정보도 갱신
-      if (state.currentUser) {
-        const fresh = state.users.find(u => u.id === state.currentUser.id);
-        if (fresh) state.currentUser = fresh;
-      }
     }
   } catch(e) {}
 }
@@ -1221,34 +1222,49 @@ async function doLogin() {
 
   if (!id || !pw) { errEl.textContent = '아이디와 비밀번호를 입력해주세요'; return; }
 
-  // 잠금 확인
   const lockMsg = checkLock(id);
   if (lockMsg) { errEl.textContent = lockMsg; return; }
 
-  // 로그인 시 서버에서 최신 계정 정보 가져오기
   errEl.textContent = '로그인 중...';
-  await loadUsersFromServer();
 
-  const user = state.users.find(u => u.id === id && u.pw === pw);
-  if (!user) {
-    recordFailedAttempt(id);
-    const remain = getRemainingAttempts(id);
-    if (remain <= 0) {
-      errEl.textContent = '로그인 5회 실패로 15분간 잠겼습니다.';
-    } else {
-      errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다. (남은 시도: ' + remain + '회)';
+  try {
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'login', username: id, password: pw })
+    });
+    const data = JSON.parse(await res.text());
+
+    if (data.error) {
+      recordFailedAttempt(id);
+      const remain = getRemainingAttempts(id);
+      if (remain <= 0) {
+        errEl.textContent = '로그인 5회 실패로 15분간 잠겼습니다.';
+      } else {
+        errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다. (남은 시도: ' + remain + '회)';
+      }
+      return;
     }
-    return;
-  }
 
-  clearFailedAttempts(id);
-  state.currentUser = user;
-  // 로그인 유지 체크 시 localStorage, 아니면 sessionStorage
-  const store = remember ? localStorage : sessionStorage;
-  store.setItem(SESSION_KEY, JSON.stringify({ id: user.id, remember }));
-  if (!remember) localStorage.removeItem(SESSION_KEY);
-  errEl.textContent = '';
-  startApp();
+    clearFailedAttempts(id);
+    // 비밀번호 없는 사용자 정보 + 세션 토큰만 저장
+    state.currentUser = {
+      id:      data.userId,
+      role:    data.role,
+      label:   data.label,
+      actors:  data.actors || [],
+      canEdit: data.canEdit !== false
+    };
+    state.sessionToken = data.token;
+
+    const store = remember ? localStorage : sessionStorage;
+    store.setItem(SESSION_KEY, JSON.stringify({ user: state.currentUser, token: data.token, remember }));
+    if (!remember) localStorage.removeItem(SESSION_KEY);
+    errEl.textContent = '';
+    startApp();
+  } catch(e) {
+    errEl.textContent = '서버 연결 실패. 잠시 후 다시 시도해주세요.';
+  }
 }
 
 function logout() {
@@ -1270,10 +1286,12 @@ function tryAutoLogin() {
   try {
     let s = JSON.parse(localStorage.getItem(SESSION_KEY));
     if (!s) s = JSON.parse(sessionStorage.getItem(SESSION_KEY));
-    if (s && s.id) {
-      const fresh = getUser(s.id);
-      if (fresh) { state.currentUser = fresh; return true; }
+    if (s && s.token && s.user) {
+      state.currentUser  = s.user;
+      state.sessionToken = s.token;
+      return true;
     }
+    // 구버전 세션 형식 (id만 저장된 경우) → 재로그인 필요
   } catch(e) {}
   return false;
 }
@@ -2337,11 +2355,11 @@ async function syncFromServer(showIndicator) {
   if (!state.apiUrl) return;
   if (showIndicator) showToast('🔄 불러오는 중...');
   try {
-    const res = await fetch(state.apiUrl + '?action=load&key=' + API_KEY + '&t=' + Date.now());
-    const text = await res.text();
-    const data = JSON.parse(text);
-    if (data.error) throw new Error('인증 오류: ' + data.error);
-
+    const tok = encodeURIComponent(state.sessionToken || '');
+    const res = await fetch(state.apiUrl + '?action=load&sessionToken=' + tok + '&t=' + Date.now());
+    const data = JSON.parse(await res.text());
+    if (data.error === 'unauthorized') { logout(); return; }
+    if (data.error) throw new Error(data.error);
     if (Array.isArray(data.events)) {
       state.events = data.events;
       saveEvents();
@@ -2360,10 +2378,9 @@ async function pushAllToServer(showIndicator) {
     const res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'save', key: API_KEY, events: state.events })
+      body: JSON.stringify({ action: 'save', sessionToken: state.sessionToken||'', events: state.events })
     });
-    const text = await res.text();
-    const data = JSON.parse(text);
+    const data = JSON.parse(await res.text());
     if (showIndicator) showToast(data.ok ? '✅ 서버에 저장됐습니다 (' + state.events.length + '개)' : '❌ 저장 실패');
     return !!data.ok;
   } catch(e) {
@@ -3273,7 +3290,7 @@ async function loadCarRecords(showIndicator) {
   if (!state.apiUrl) return;
   if (showIndicator) showToast('🔄 차량 기록 불러오는 중...');
   try {
-    var res = await fetch(state.apiUrl + '?action=loadCarRecords&key=' + API_KEY + '&t=' + Date.now());
+    var res = await fetch(state.apiUrl + '?action=loadCarRecords&sessionToken=' + encodeURIComponent(state.sessionToken||'') + '&t=' + Date.now());
     var text = await res.text();
     var data = JSON.parse(text);
     if (data.error) throw new Error(data.error);
@@ -3294,7 +3311,7 @@ async function pushCarRecord(record) {
     var res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'addCarRecord', key: API_KEY, record: record })
+      body: JSON.stringify({ action: 'addCarRecord', sessionToken: state.sessionToken||'', record: record })
     });
     var data = JSON.parse(await res.text());
     return !!data.ok;
@@ -3307,7 +3324,7 @@ async function deleteCarRecordServer(id) {
     var res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'deleteCarRecord', key: API_KEY, id: id })
+      body: JSON.stringify({ action: 'deleteCarRecord', sessionToken: state.sessionToken||'', id: id })
     });
     var data = JSON.parse(await res.text());
     return !!data.ok;
