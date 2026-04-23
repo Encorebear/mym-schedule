@@ -2581,6 +2581,139 @@ async function generateExcel() {
   wb.creator = 'MYM Schedule';
   wb.created = new Date();
 
+  // ══ Sheet 0: 월별 달력 (맨 앞) ═══════════════════════════
+  var wsCal = wb.addWorksheet('월별달력', { views: [{ state: 'frozen', ySplit: 2 }] });
+  wsCal.columns = [
+    { width: 4 },
+    { width: 21 }, { width: 21 }, { width: 21 }, { width: 21 },
+    { width: 21 }, { width: 21 }, { width: 21 }
+  ];
+
+  // 표시할 월 목록
+  var _calMonths = [];
+  if (period === 'month') {
+    _calMonths = [{year: year, month: month}];
+  } else if (period === 'year') {
+    for (var _cm = 0; _cm < 12; _cm++) _calMonths.push({year: year, month: _cm});
+  } else {
+    var _ymSet = {};
+    evts.forEach(function(ev) {
+      var _d = new Date(ev.date);
+      var _k = _d.getFullYear() + '-' + _d.getMonth();
+      if (!_ymSet[_k]) _ymSet[_k] = {year: _d.getFullYear(), month: _d.getMonth()};
+    });
+    Object.keys(_ymSet).sort().forEach(function(k){ _calMonths.push(_ymSet[k]); });
+    if (!_calMonths.length) { var _nd = new Date(); _calMonths = [{year: _nd.getFullYear(), month: _nd.getMonth()}]; }
+  }
+
+  // 날짜별 이벤트 인덱스
+  var _evByDate = {};
+  evts.forEach(function(ev) {
+    if (!_evByDate[ev.date]) _evByDate[ev.date] = [];
+    _evByDate[ev.date].push(ev);
+  });
+
+  // 타이틀
+  wsCal.addRow(['월별 스케줄', '', '', '', '', '', '', '']);
+  wsCal.mergeCells(1, 1, 1, 8);
+  var _calTc = wsCal.getCell(1, 1);
+  _calTc.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+  _calTc.fill = TITLE_FILL; _calTc.border = BORDER_ALL;
+  _calTc.alignment = { horizontal: 'center', vertical: 'middle' };
+  wsCal.getRow(1).height = 28;
+
+  wsCal.addRow([periodStr, '', '', '', '', '', '', '']);
+  wsCal.mergeCells(2, 1, 2, 8);
+  var _calSc = wsCal.getCell(2, 1);
+  _calSc.font = { size: 10, color: { argb: 'FFAECBEA' } };
+  _calSc.fill = TITLE_FILL; _calSc.border = BORDER_ALL;
+  _calSc.alignment = { horizontal: 'center', vertical: 'middle' };
+  wsCal.getRow(2).height = 16;
+
+  _calMonths.forEach(function(ym) {
+    var _yr = ym.year, _mo = ym.month;
+    var _firstDay = new Date(_yr, _mo, 1);
+    var _lastDay  = new Date(_yr, _mo + 1, 0);
+    var _dow1     = _firstDay.getDay(); // 0=일
+    var _fromMon  = _dow1 === 0 ? 6 : _dow1 - 1;
+    var _wkCount  = Math.ceil((_fromMon + _lastDay.getDate()) / 7);
+
+    // 요일 헤더
+    var _hRow = wsCal.addRow(['', '월', '화', '수', '목', '금', '토', '일']);
+    _hRow.height = 18;
+    _hRow.eachCell({ includeEmpty: true }, function(cell, ci) {
+      if (ci === 1) { cell.border = BORDER_ALL; return; }
+      cell.font = { bold: true, size: 10, color: { argb: (ci === 7 || ci === 8) ? 'FFEE3333' : 'FFFFFFFF' } };
+      cell.fill = HEADER_FILL; cell.border = BORDER_ALL;
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    var _cur = new Date(_yr, _mo, 1 - _fromMon);
+    var _mStart = wsCal.rowCount + 1;
+
+    for (var _wk = 0; _wk < _wkCount; _wk++) {
+      var _dVals = [''], _eVals = [''], _maxL = 1;
+
+      for (var _d = 0; _d < 7; _d++) {
+        var _inMo = (_cur.getFullYear() === _yr && _cur.getMonth() === _mo);
+        var _dk   = _cur.getFullYear() + '-'
+          + String(_cur.getMonth()+1).padStart(2,'0') + '-'
+          + String(_cur.getDate()).padStart(2,'0');
+        _dVals.push(_inMo
+          ? String(_cur.getMonth()+1).padStart(2,'0') + '/' + String(_cur.getDate()).padStart(2,'0')
+          : '');
+        var _dEvts = (_inMo && _evByDate[_dk]) ? _evByDate[_dk] : [];
+        var _lines = _dEvts.map(function(ev) {
+          var _s = '[' + ev.actor + '] ';
+          if (ev.startTime) _s += ev.startTime + ' ';
+          if (ev.type === PRIVATE_TYPE && !_admin) { _s += '비공개'; }
+          else { _s += (ev.title||''); if (ev.location) _s += '(@' + ev.location + ')'; }
+          if (ev.manager) _s += ev.manager;
+          return _s;
+        });
+        _eVals.push(_lines.join('\n'));
+        if (_lines.length > _maxL) _maxL = _lines.length;
+        _cur.setDate(_cur.getDate() + 1);
+      }
+
+      // 날짜 행
+      var _dr = wsCal.addRow(_dVals);
+      _dr.height = 13;
+      _dr.eachCell({ includeEmpty: true }, function(cell, ci) {
+        if (ci === 1) return;
+        cell.font = { bold: true, size: 9, color: { argb: (ci === 7 || ci === 8) ? 'FFEE3333' : 'FF222222' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDE4F0' } };
+        cell.border = BORDER_ALL;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // 이벤트 행
+      var _er = wsCal.addRow(_eVals);
+      _er.height = Math.max(22, _maxL * 13 + 4);
+      _er.eachCell({ includeEmpty: true }, function(cell, ci) {
+        if (ci === 1) return;
+        cell.font = { size: 8 }; cell.border = BORDER_ALL;
+        cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      });
+    }
+
+    var _mEnd = wsCal.rowCount;
+
+    // 월 레이블 병합
+    if (_mEnd >= _mStart) {
+      if (_mEnd > _mStart) wsCal.mergeCells(_mStart, 1, _mEnd, 1);
+      var _mc = wsCal.getCell(_mStart, 1);
+      _mc.value = MONTHS[_mo];
+      _mc.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+      _mc.fill = HEADER_FILL; _mc.border = BORDER_ALL;
+      _mc.alignment = { horizontal: 'center', vertical: 'middle', textRotation: 90 };
+    }
+
+    // 월 구분 빈 행
+    var _sep = wsCal.addRow(['', '', '', '', '', '', '', '']);
+    _sep.height = 5;
+  });
+
   // ══ Sheet 1: 전체 일정 ══════════════════════════
   var ws1 = wb.addWorksheet('전체일정', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws1.columns = [
