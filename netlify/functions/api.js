@@ -1,6 +1,7 @@
 // MYM Schedule — Netlify Function Proxy
 
-const GAS_URL = process.env.GAS_URL || 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+// 환경변수보다 코드 직접 지정 우선 (환경변수 충돌 방지)
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
 
 exports.handler = async (event) => {
   const headers = {
@@ -17,12 +18,7 @@ exports.handler = async (event) => {
   try {
     let response;
 
-    if (event.httpMethod === 'GET') {
-      const params = { ...(event.queryStringParameters || {}) };
-      const qs = new URLSearchParams(params).toString();
-      response = await fetch(`${GAS_URL}?${qs}`, { redirect: 'follow' });
-
-    } else if (event.httpMethod === 'POST') {
+    if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       response = await fetch(GAS_URL, {
         method:   'POST',
@@ -30,14 +26,13 @@ exports.handler = async (event) => {
         body:     JSON.stringify(body),
         redirect: 'follow'
       });
-
     } else {
-      return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
+      response = await fetch(GAS_URL, { redirect: 'follow' });
     }
 
     const text = await response.text();
 
-    // GAS가 HTML 오류 페이지를 돌려보낼 때 JSON으로 변환
+    // GAS가 HTML 오류 페이지를 돌려줄 경우 JSON으로 변환
     if (text.trim().startsWith('<')) {
       return { statusCode: 200, headers, body: JSON.stringify({ ok: false, error: 'GAS_HTML_ERROR' }) };
     }
