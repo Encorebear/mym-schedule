@@ -1,8 +1,7 @@
 // MYM Schedule — Netlify Function Proxy
-// GAS URL과 API 키를 서버 환경변수에 숨겨서 클라이언트에 노출되지 않도록 함
 
-const GAS_URL = process.env.GAS_URL;
-const API_KEY  = process.env.MYM_API_KEY;
+const GAS_URL = process.env.GAS_URL || 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+const API_KEY = process.env.MYM_API_KEY || 'mym_internal';
 
 exports.handler = async (event) => {
   const headers = {
@@ -16,25 +15,16 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  if (!GAS_URL || !API_KEY) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server misconfigured' }) };
-  }
-
   try {
     let response;
 
     if (event.httpMethod === 'GET') {
-      // 클라이언트가 보낸 key는 무시하고 환경변수 key로 교체
       const params = { ...(event.queryStringParameters || {}) };
-      delete params.key;
-      params.key = API_KEY;
       const qs = new URLSearchParams(params).toString();
       response = await fetch(`${GAS_URL}?${qs}`, { redirect: 'follow' });
 
     } else if (event.httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
-      delete body.key;
-      body.key = API_KEY;
       response = await fetch(GAS_URL, {
         method:   'POST',
         headers:  { 'Content-Type': 'text/plain' },
