@@ -1152,8 +1152,12 @@ async function loadUsersFromServer() {
     const data = JSON.parse(await res.text());
     if (data.error === 'unauthorized') { logout(); return; }
     if (Array.isArray(data.users) && data.users.length > 0) {
-      // 비밀번호 제거 후 저장 (서버에서 이미 제거하지만 방어적으로 처리)
-      state.users = data.users.map(function(u){ const c={...u}; delete c.pw; return c; });
+      // 관리자는 pw 포함 유지 (저장 시 비밀번호 유실 방지)
+      state.users = data.users.map(function(u){
+        const c = {...u};
+        if (!isAdmin()) delete c.pw;
+        return c;
+      });
       localStorage.setItem(USERS_KEY, JSON.stringify(state.users));
     }
   } catch(e) {}
