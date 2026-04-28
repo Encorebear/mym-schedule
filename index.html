@@ -2425,7 +2425,7 @@ async function loadAuditLog() {
     const res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'getAuditLog', sessionToken: state.sessionToken })
+      body: JSON.stringify({ action: 'loadAuditLog', sessionToken: state.sessionToken })
     });
     const text = await res.text();
     // HTML 오류 페이지 방어
