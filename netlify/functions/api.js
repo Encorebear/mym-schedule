@@ -27,7 +27,8 @@ exports.handler = async (event) => {
         redirect: 'follow'
       });
     } else {
-      response = await fetch(GAS_URL, { redirect: 'follow' });
+      const qs = event.rawQuery ? '?' + event.rawQuery : '';
+      response = await fetch(GAS_URL + qs, { redirect: 'follow' });
     }
 
     const text = await response.text();
