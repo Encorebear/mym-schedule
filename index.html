@@ -2384,19 +2384,24 @@ function adminDeleteUser(id) {
 
 async function logAudit(actionType, ev, oldEv) {
   if (!state.apiUrl || !state.sessionToken) return;
+  const detailPayload = oldEv
+    ? JSON.stringify({ before: oldEv, after: ev })
+    : JSON.stringify(ev);
   const entry = {
     action: 'logAudit',
     sessionToken: state.sessionToken,
     timestamp: new Date().toISOString(),
     userId: state.currentUser ? state.currentUser.id : '',
-    actionType: actionType,        // '생성' | '수정' | '삭제' | '완료' | '완료취소'
+    // GAS handleLogAudit_ 호환 필드
+    auditAction: actionType,
+    event: oldEv ? { ...ev, _before: oldEv } : ev,
+    // 프론트엔드 자체 필드 (하위호환)
+    actionType: actionType,
     eventId: ev.id || '',
     actor: ev.actor || '',
     title: ev.title || '',
     date: ev.date || '',
-    details: oldEv
-      ? JSON.stringify({ before: oldEv, after: ev })
-      : JSON.stringify(ev)
+    details: detailPayload
   };
   try {
     await fetch(state.apiUrl, {
@@ -2464,21 +2469,40 @@ function renderAuditLog(logs) {
   </div>`;
 
   sorted.forEach(log => {
+    // GAS 반환 필드명 정규화 (action→actionType, eventTitle→title, detail→details)
+    const actionType_ = log.actionType || log.action || '';
+    const title_ = log.title || log.eventTitle || '(제목없음)';
+    const details_ = log.details || log.detail || '';
+    // actor/date: 직접 필드 또는 detail JSON에서 파싱
+    let actor_ = log.actor || '';
+    let date_ = log.date || '';
+    if (!actor_ || !date_) {
+      try {
+        const d = JSON.parse(details_);
+        const src = d.after || d;
+        if (!actor_) actor_ = src.actor || '';
+        if (!date_) date_ = src.date || '';
+      } catch(e) {}
+    }
+
     const ts = log.timestamp ? new Date(log.timestamp) : null;
     const dateStr = ts ? `${ts.getFullYear()}.${String(ts.getMonth()+1).padStart(2,'0')}.${String(ts.getDate()).padStart(2,'0')} ${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}` : '-';
-    const icon = actionIcon[log.actionType] || '•';
-    const color = actionColor[log.actionType] || '#64748b';
-    const actor = log.actor ? `<span style="font-size:11px;color:${(ACTORS[log.actor]||{}).color||'#64748b'};background:${(ACTORS[log.actor]||{}).color||'#64748b'}22;padding:1px 6px;border-radius:8px;margin-right:4px;">${log.actor}</span>` : '';
+    const icon = actionIcon[actionType_] || '•';
+    const color = actionColor[actionType_] || '#64748b';
+    const actor = actor_ ? `<span style="font-size:11px;color:${(ACTORS[actor_]||{}).color||'#64748b'};background:${(ACTORS[actor_]||{}).color||'#64748b'}22;padding:1px 6px;border-radius:8px;margin-right:4px;">${actor_}</span>` : '';
 
     let detailHtml = '';
-    if (log.details && log.actionType === '수정') {
+    if (details_ && actionType_ === '수정') {
       try {
-        const d = JSON.parse(log.details);
+        const d = JSON.parse(details_);
         const diffs = [];
         const fields = {title:'제목',date:'날짜',startTime:'시작',endTime:'종료',location:'장소',memo:'메모',manager:'담당자',type:'유형'};
+        // { before, after } 또는 { _before, ...after } 형식 모두 지원
+        const before_ = d.before || d._before || {};
+        const after_ = d.after ? d.after : (d._before ? (()=>{const c={...d};delete c._before;return c;})() : d);
         Object.entries(fields).forEach(([k, label]) => {
-          if ((d.before||{})[k] !== (d.after||{})[k]) {
-            diffs.push(`<span style="color:var(--text3)">${label}:</span> <span style="color:#ef4444;text-decoration:line-through">${(d.before||{})[k]||'-'}</span> → <span style="color:#22c55e">${(d.after||{})[k]||'-'}</span>`);
+          if (before_[k] !== after_[k]) {
+            diffs.push(`<span style="color:var(--text3)">${label}:</span> <span style="color:#ef4444;text-decoration:line-through">${before_[k]||'-'}</span> → <span style="color:#22c55e">${after_[k]||'-'}</span>`);
           }
         });
         if (diffs.length) detailHtml = `<div style="font-size:11px;line-height:1.8;margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:6px;">${diffs.join('<br>')}</div>`;
@@ -2488,12 +2512,12 @@ function renderAuditLog(logs) {
     html += `<div style="border-left:3px solid ${color};padding:8px 10px;margin-bottom:8px;background:var(--bg3);border-radius:0 8px 8px 0;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
         <span style="font-size:15px;">${icon}</span>
-        <span style="font-size:12px;font-weight:700;color:${color};">${log.actionType}</span>
+        <span style="font-size:12px;font-weight:700;color:${color};">${actionType_}</span>
         ${actor}
         <span style="font-size:11px;color:var(--text3);margin-left:auto;">${log.userId||''}</span>
       </div>
-      <div style="font-size:13px;font-weight:500;color:var(--text1);">${log.title||'(제목없음)'}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px;">${log.date||''} &nbsp;·&nbsp; ${dateStr}</div>
+      <div style="font-size:13px;font-weight:500;color:var(--text1);">${title_}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">${date_} &nbsp;·&nbsp; ${dateStr}</div>
       ${detailHtml}
     </div>`;
   });
