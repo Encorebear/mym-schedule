@@ -42,6 +42,31 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify({ ok: false, error: 'GAS_HTML_ERROR' }) };
     }
 
+    // action=load 응답에서 이벤트 스키마 정규화
+    // GAS 구버전이 actors(복수)/id 누락된 이벤트를 반환할 경우 보정
+    const action = (event.httpMethod === 'GET')
+      ? (event.queryStringParameters || {}).action
+      : (() => { try { return JSON.parse(event.body || '{}').action; } catch(e) { return ''; } })();
+
+    if (action === 'load') {
+      try {
+        const data = JSON.parse(text);
+        if (data.ok && Array.isArray(data.events)) {
+          let changed = false;
+          data.events = data.events.map((ev, idx) => {
+            // actors(복수) → actor(단수) 변환
+            if (!ev.actor && ev.actors) { ev.actor = ev.actors; changed = true; }
+            // id 없으면 생성
+            if (!ev.id) { ev.id = 'sv_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2,5); changed = true; }
+            return ev;
+          });
+          if (changed) {
+            return { statusCode: 200, headers, body: JSON.stringify(data) };
+          }
+        }
+      } catch(e) { /* 파싱 실패시 원본 반환 */ }
+    }
+
     return { statusCode: 200, headers, body: text };
 
   } catch (err) {
