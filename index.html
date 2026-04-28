@@ -2111,25 +2111,41 @@ function openChangePw() {
   showSheet('changepw-sheet');
 }
 
-function changePassword() {
+async function changePassword() {
   const cur=document.getElementById('pw-current').value;
   const nw=document.getElementById('pw-new').value;
   const cf=document.getElementById('pw-confirm').value;
   const errEl=document.getElementById('pw-error');
   const user=state.currentUser;
 
-  // 현재 비밀번호 확인: 관리자는 state.users에서, 그 외엔 세션 임시값 사용
-  const uRecord = state.users.find(u => u.id === user.id);
-  const storedPw = (uRecord && (uRecord.password || uRecord.pw)) || state._sessionPw;
-  if (storedPw !== undefined && storedPw !== cur) { errEl.textContent='현재 비밀번호가 올바르지 않습니다'; return; }
+  // 클라이언트측 유효성 검사
+  if (!cur) { errEl.textContent='현재 비밀번호를 입력하세요'; return; }
   if (nw.length<4) { errEl.textContent='비밀번호는 4자 이상이어야 합니다'; return; }
   if (nw!==cf) { errEl.textContent='새 비밀번호가 일치하지 않습니다'; return; }
 
+  errEl.textContent='저장 중...';
+  try {
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'changePassword', sessionToken: state.sessionToken, currentPassword: cur, newPassword: nw })
+    });
+    const data = JSON.parse(await res.text());
+    if (!data.ok) {
+      if (data.error === 'wrong_current_password') errEl.textContent='현재 비밀번호가 올바르지 않습니다';
+      else errEl.textContent='비밀번호 변경 실패: ' + (data.error || 'unknown');
+      return;
+    }
+  } catch(e) {
+    errEl.textContent='서버 오류: ' + e.message;
+    return;
+  }
+
+  // 서버 저장 성공 후 로컬 state 업데이트
   const idx=state.users.findIndex(u=>u.id===user.id);
   if(idx!==-1) {
     state.users[idx].password = nw;
     delete state.users[idx].pw;
-    saveUsers();
   }
   state._sessionPw = nw; // 메모리 내 세션 비밀번호도 업데이트
   hideSheet('changepw-sheet');
