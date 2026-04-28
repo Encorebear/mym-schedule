@@ -1,7 +1,6 @@
 // MYM Schedule — Netlify Function Proxy
 
 const GAS_URL = process.env.GAS_URL || 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
-const API_KEY = process.env.MYM_API_KEY || 'mym_internal';
 
 exports.handler = async (event) => {
   const headers = {
@@ -37,9 +36,15 @@ exports.handler = async (event) => {
     }
 
     const text = await response.text();
+
+    // GAS가 HTML 오류 페이지를 돌려보낼 때 JSON으로 변환
+    if (text.trim().startsWith('<')) {
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: false, error: 'GAS_HTML_ERROR' }) };
+    }
+
     return { statusCode: 200, headers, body: text };
 
   } catch (err) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ ok: false, error: err.message }) };
   }
 };
