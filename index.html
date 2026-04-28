@@ -1155,7 +1155,7 @@ async function loadUsersFromServer() {
       // 관리자는 pw 포함 유지 (저장 시 비밀번호 유실 방지)
       state.users = data.users.map(function(u){
         const c = {...u};
-        if (!isAdmin()) delete c.pw;
+        if (!isAdmin()) { delete c.password; delete c.pw; }
         return c;
       });
       localStorage.setItem(USERS_KEY, JSON.stringify(state.users));
@@ -1228,6 +1228,7 @@ async function doLogin() {
       actors:  data.actors || [],
       canEdit: data.canEdit !== false
     };
+    state._sessionPw = pw; // 비밀번호 변경 검증용 (메모리에만 보관, localStorage 저장 안 함)
     state.sessionToken = data.token;
 
     const store = remember ? localStorage : sessionStorage;
@@ -2117,12 +2118,20 @@ function changePassword() {
   const errEl=document.getElementById('pw-error');
   const user=state.currentUser;
 
-  if (user.pw!==cur) { errEl.textContent='현재 비밀번호가 올바르지 않습니다'; return; }
+  // 현재 비밀번호 확인: 관리자는 state.users에서, 그 외엔 세션 임시값 사용
+  const uRecord = state.users.find(u => u.id === user.id);
+  const storedPw = (uRecord && (uRecord.password || uRecord.pw)) || state._sessionPw;
+  if (storedPw !== undefined && storedPw !== cur) { errEl.textContent='현재 비밀번호가 올바르지 않습니다'; return; }
   if (nw.length<4) { errEl.textContent='비밀번호는 4자 이상이어야 합니다'; return; }
   if (nw!==cf) { errEl.textContent='새 비밀번호가 일치하지 않습니다'; return; }
 
   const idx=state.users.findIndex(u=>u.id===user.id);
-  if(idx!==-1) { state.users[idx].pw=nw; state.currentUser.pw=nw; saveUsers(); }
+  if(idx!==-1) {
+    state.users[idx].password = nw;
+    delete state.users[idx].pw;
+    saveUsers();
+  }
+  state._sessionPw = nw; // 메모리 내 세션 비밀번호도 업데이트
   hideSheet('changepw-sheet');
   showToast('비밀번호가 변경되었습니다');
 }
@@ -2267,7 +2276,7 @@ function adminSaveEdit(id) {
   state.users[idx].role = role;
   state.users[idx].canEdit = canEditVal;
   state.users[idx].actors = actors;
-  if (pw) state.users[idx].pw = pw;
+  if (pw) { state.users[idx].password = pw; delete state.users[idx].pw; }
 
   saveUsers();
   editingUserId = null;
@@ -2292,7 +2301,7 @@ function adminAddUser() {
   if (state.users.find(u=>u.id===id)) { showToast('이미 존재하는 아이디입니다'); return; }
   if (role==='actor'&&actors.length===0) { showToast('담당 배우를 선택해주세요'); return; }
 
-  state.users.push({ id, pw, role, actors, canEdit:canEditVal, label:label||id });
+  state.users.push({ id, password: pw, role, actors, canEdit:canEditVal, label:label||id });
   saveUsers();
   showToast(`${id} 계정이 추가되었습니다`);
   renderAdminPanel();
