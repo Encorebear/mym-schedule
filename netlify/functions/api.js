@@ -1,7 +1,7 @@
 // MYM Schedule — Netlify Function Proxy
 
 // 환경변수보다 코드 직접 지정 우선 (환경변수 충돌 방지)
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbynNDWxLMSXZVxO7xscWw-h4R7mpougxeP8tBH5wzSRDBDq0fpO4KOsocfvuz20U1MV/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbybehMvForNPpeKV8Av7TTUKqeTvmGLAxuy-mz-eYfBcvDVpqtGoYT4f_sU9QF3jwJV/exec';
 
 exports.handler = async (event) => {
   const headers = {
