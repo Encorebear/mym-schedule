@@ -2470,7 +2470,14 @@ async function syncFromServer(showIndicator) {
         await pushAllToServer(false);
         if (showIndicator) showToast('✅ 로컬 데이터 서버 저장 완료 (' + state.events.length + '개)');
       } else {
-        state.events = data.events;
+        // 서버 스키마 정규화: 구버전 GAS가 반환하는 필드명 통일
+        state.events = data.events.map(ev => {
+          // actors(복수) → actor(단수) 변환
+          if (!ev.actor && ev.actors) ev.actor = ev.actors;
+          // id 없으면 생성
+          if (!ev.id) ev.id = 'sv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+          return ev;
+        });
         saveEvents();
         renderCurrentView();
         if (showIndicator) showToast('✅ 완료 (' + data.events.length + '개)');
