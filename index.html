@@ -2465,10 +2465,16 @@ async function syncFromServer(showIndicator) {
     if (data.error === 'unauthorized') { if (showIndicator) showToast('⚠️ 세션 만료. 다시 로그인해주세요.'); logout(); return; }
     if (data.error) throw new Error(data.error);
     if (Array.isArray(data.events)) {
-      state.events = data.events;
-      saveEvents();
-      renderCurrentView();
-      if (showIndicator) showToast('✅ 완료 (' + data.events.length + '개)');
+      if (data.events.length === 0 && state.events.length > 0) {
+        // 서버가 비어있고 로컬에 데이터 있으면 → 로컬 보존 + 서버에 업로드
+        await pushAllToServer(false);
+        if (showIndicator) showToast('✅ 로컬 데이터 서버 저장 완료 (' + state.events.length + '개)');
+      } else {
+        state.events = data.events;
+        saveEvents();
+        renderCurrentView();
+        if (showIndicator) showToast('✅ 완료 (' + data.events.length + '개)');
+      }
     }
   } catch(e) {
     if (showIndicator) showToast('❌ 실패: ' + e.message);
