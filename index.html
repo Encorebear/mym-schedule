@@ -1150,7 +1150,7 @@ async function loadUsersFromServer() {
     const tok = encodeURIComponent(state.sessionToken || '');
     const res = await fetch(state.apiUrl + '?action=loadUsers&sessionToken=' + tok + '&t=' + Date.now());
     const data = JSON.parse(await res.text());
-    if (data.error === 'unauthorized') { logout(); return; }
+    if (data.error === 'unauthorized') { return; } // 로그아웃 안 함 — 세션 만료 시 다음 동기화에서 처리
     if (Array.isArray(data.users) && data.users.length > 0) {
       // 관리자는 pw 포함 유지 (저장 시 비밀번호 유실 방지)
       state.users = data.users.map(function(u){
@@ -2462,7 +2462,7 @@ async function syncFromServer(showIndicator) {
     const tok = encodeURIComponent(state.sessionToken || '');
     const res = await fetch(state.apiUrl + '?action=load&sessionToken=' + tok + '&t=' + Date.now());
     const data = JSON.parse(await res.text());
-    if (data.error === 'unauthorized') { logout(); return; }
+    if (data.error === 'unauthorized') { if (showIndicator) showToast('⚠️ 세션 만료. 다시 로그인해주세요.'); logout(); return; }
     if (data.error) throw new Error(data.error);
     if (Array.isArray(data.events)) {
       state.events = data.events;

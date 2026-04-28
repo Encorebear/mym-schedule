@@ -27,7 +27,11 @@ exports.handler = async (event) => {
         redirect: 'follow'
       });
     } else {
-      const qs = event.rawQuery ? '?' + event.rawQuery : '';
+      // queryStringParameters로 쿼리스트링 재조립 (rawQuery보다 안정적)
+      const qp = event.queryStringParameters || {};
+      const qs = Object.keys(qp).length
+        ? '?' + Object.entries(qp).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+        : '';
       response = await fetch(GAS_URL + qs, { redirect: 'follow' });
     }
 
