@@ -862,6 +862,18 @@
   <div class="sheet-body" id="admin-sheet-body"></div>
 </div>
 
+<!-- AUDIT LOG SHEET -->
+<div class="bottom-sheet" id="audit-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">📋 감사 로그</div>
+    <button class="sheet-close" onclick="hideSheet('audit-sheet')">✕</button>
+  </div>
+  <div class="sheet-body" id="audit-sheet-body">
+    <div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">불러오는 중...</div>
+  </div>
+</div>
+
 <!-- CHANGE PW SHEET -->
 <div class="bottom-sheet" id="changepw-sheet">
   <div class="sheet-handle"></div>
@@ -1621,6 +1633,8 @@ function renderDayBody(ds) {
 
 function deleteEvent(id, ds) {
   if (!confirm('이 일정을 삭제하시겠습니까?')) return;
+  const ev = state.events.find(e=>e.id===id);
+  if (ev) logAudit('삭제', ev);
   state.events=state.events.filter(e=>e.id!==id);
   saveAndSync();
   renderCurrentView();
@@ -1659,6 +1673,7 @@ function completeEvent(id, ds) {
     ev.completed = true;
     ev.completedAt = new Date().toISOString();
     ev.completedBy = state.currentUser ? state.currentUser.id : '';
+    logAudit('완료', ev);
     saveAndSync();
     renderCurrentView();
     renderDayBody(ds);
@@ -1673,6 +1688,7 @@ function uncompleteEvent(id, ds) {
   ev.completed = false;
   delete ev.completedAt;
   delete ev.completedBy;
+  logAudit('완료취소', ev);
   saveAndSync();
   renderCurrentView();
   renderDayBody(ds);
@@ -2064,9 +2080,11 @@ function submitEventForm(e) {
   if (editingId) {
     const idx=state.events.findIndex(e=>e.id===editingId);
     if(idx!==-1) state.events[idx]=ev;
+    logAudit('수정', ev, existing);
     showToast('수정되었습니다');
   } else {
     state.events.push(ev);
+    logAudit('생성', ev);
     showToast('일정이 추가되었습니다');
   }
   saveAndSync();
@@ -2103,6 +2121,8 @@ function openUserMenu() {
       <span class="menu-icon">📥</span> 서버 → 이 기기 다운로드 <span class="menu-arrow">›</span></div>`;
     html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openAdmin()">
       <span class="menu-icon">👑</span> 계정 관리 <span class="menu-arrow">›</span></div>`;
+    html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openAuditLog()">
+      <span class="menu-icon">📋</span> 감사 로그 <span class="menu-arrow">›</span></div>`;
   } else {
     html+=`<div class="menu-item" onclick="syncFromServer(true);closeUserMenu()">
       <span class="menu-icon">📥</span> 서버에서 다운로드 <span class="menu-arrow">›</span></div>`;
@@ -2323,6 +2343,119 @@ function adminDeleteUser(id) {
   saveUsers();
   showToast('삭제되었습니다');
   renderAdminPanel();
+}
+
+// ═══════════════════════════════════════════════════
+//  AUDIT LOG
+// ═══════════════════════════════════════════════════
+
+async function logAudit(actionType, ev, oldEv) {
+  if (!state.apiUrl || !state.sessionToken) return;
+  const entry = {
+    action: 'logAudit',
+    sessionToken: state.sessionToken,
+    timestamp: new Date().toISOString(),
+    userId: state.currentUser ? state.currentUser.id : '',
+    actionType: actionType,        // '생성' | '수정' | '삭제' | '완료' | '완료취소'
+    eventId: ev.id || '',
+    actor: ev.actor || '',
+    title: ev.title || '',
+    date: ev.date || '',
+    details: oldEv
+      ? JSON.stringify({ before: oldEv, after: ev })
+      : JSON.stringify(ev)
+  };
+  try {
+    await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(entry)
+    });
+  } catch(e) { /* 감사로그 실패는 무시 */ }
+}
+
+async function openAuditLog() {
+  hideSheet('admin-sheet');
+  document.getElementById('audit-sheet-body').innerHTML =
+    '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">불러오는 중...</div>';
+  showSheet('audit-sheet');
+  await loadAuditLog();
+}
+
+async function loadAuditLog() {
+  const bodyEl = document.getElementById('audit-sheet-body');
+  if (!state.apiUrl || !state.sessionToken) {
+    bodyEl.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">서버 연결 필요</div>';
+    return;
+  }
+  try {
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'getAuditLog', sessionToken: state.sessionToken })
+    });
+    const data = JSON.parse(await res.text());
+    if (!data.ok) { bodyEl.innerHTML = '<div style="padding:20px;color:#ef4444;">로드 실패: ' + (data.error||'알 수 없는 오류') + '</div>'; return; }
+    renderAuditLog(data.logs || []);
+  } catch(e) {
+    bodyEl.innerHTML = '<div style="padding:20px;color:#ef4444;">오류: ' + e.message + '</div>';
+  }
+}
+
+function renderAuditLog(logs) {
+  const bodyEl = document.getElementById('audit-sheet-body');
+  if (!logs.length) {
+    bodyEl.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">기록이 없습니다</div>';
+    return;
+  }
+
+  const actionIcon = { '생성':'➕', '수정':'✏️', '삭제':'🗑', '완료':'✅', '완료취소':'↩' };
+  const actionColor = { '생성':'#22c55e', '수정':'#f59e0b', '삭제':'#ef4444', '완료':'#3b82f6', '완료취소':'#8b5cf6' };
+
+  // 최신순 정렬
+  const sorted = [...logs].reverse();
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div style="font-size:12px;color:var(--text3);">총 ${logs.length}건 · 최신순</div>
+    <button onclick="loadAuditLog()" style="font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text2);cursor:pointer;">🔄 새로고침</button>
+  </div>`;
+
+  sorted.forEach(log => {
+    const ts = log.timestamp ? new Date(log.timestamp) : null;
+    const dateStr = ts ? `${ts.getFullYear()}.${String(ts.getMonth()+1).padStart(2,'0')}.${String(ts.getDate()).padStart(2,'0')} ${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}` : '-';
+    const icon = actionIcon[log.actionType] || '•';
+    const color = actionColor[log.actionType] || '#64748b';
+    const actor = log.actor ? `<span style="font-size:11px;color:${(ACTORS[log.actor]||{}).color||'#64748b'};background:${(ACTORS[log.actor]||{}).color||'#64748b'}22;padding:1px 6px;border-radius:8px;margin-right:4px;">${log.actor}</span>` : '';
+
+    let detailHtml = '';
+    if (log.details && log.actionType === '수정') {
+      try {
+        const d = JSON.parse(log.details);
+        const diffs = [];
+        const fields = {title:'제목',date:'날짜',startTime:'시작',endTime:'종료',location:'장소',memo:'메모',manager:'담당자',type:'유형'};
+        Object.entries(fields).forEach(([k, label]) => {
+          if ((d.before||{})[k] !== (d.after||{})[k]) {
+            diffs.push(`<span style="color:var(--text3)">${label}:</span> <span style="color:#ef4444;text-decoration:line-through">${(d.before||{})[k]||'-'}</span> → <span style="color:#22c55e">${(d.after||{})[k]||'-'}</span>`);
+          }
+        });
+        if (diffs.length) detailHtml = `<div style="font-size:11px;line-height:1.8;margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:6px;">${diffs.join('<br>')}</div>`;
+      } catch(e) {}
+    }
+
+    html += `<div style="border-left:3px solid ${color};padding:8px 10px;margin-bottom:8px;background:var(--bg3);border-radius:0 8px 8px 0;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+        <span style="font-size:15px;">${icon}</span>
+        <span style="font-size:12px;font-weight:700;color:${color};">${log.actionType}</span>
+        ${actor}
+        <span style="font-size:11px;color:var(--text3);margin-left:auto;">${log.userId||''}</span>
+      </div>
+      <div style="font-size:13px;font-weight:500;color:var(--text1);">${log.title||'(제목없음)'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px;">${log.date||''} &nbsp;·&nbsp; ${dateStr}</div>
+      ${detailHtml}
+    </div>`;
+  });
+
+  bodyEl.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════
