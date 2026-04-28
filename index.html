@@ -1320,7 +1320,9 @@ function buildActorFilter() {
   if (user.role === 'admin' || !user.actors || user.actors.length === 0) {
     visibleActors = ACTOR_LIST;
   } else {
-    visibleActors = user.actors;
+    // ACTORS 딕셔너리에 존재하는 배우만 필터링 (없는 키는 스킵)
+    visibleActors = user.actors.filter(a => ACTORS[a]);
+    if (visibleActors.length === 0) visibleActors = ACTOR_LIST;
   }
 
   let html = '';
@@ -1330,6 +1332,7 @@ function buildActorFilter() {
   }
   visibleActors.forEach(actor => {
     const ac = ACTORS[actor];
+    if (!ac) return; // 방어 코드: 알 수 없는 배우 스킵
     const isActive = state.selectedActor === actor;
     html += `<div class="actor-chip" data-actor="${actor}" onclick="filterActor('${actor}')"
       style="background:${ac.bg.replace('0.85','0.15')};color:${ac.color};border-color:${isActive ? ac.color : 'var(--border)'};">${actor}</div>`;
@@ -1353,7 +1356,7 @@ function updateFilterHighlight() {
       chip.style.color = isActive ? 'var(--accent)' : 'var(--text3)';
     } else {
       const ac = ACTORS[a];
-      chip.style.borderColor = isActive ? ac.color : 'var(--border)';
+      if (ac) chip.style.borderColor = isActive ? ac.color : 'var(--border)';
     }
   });
 }
