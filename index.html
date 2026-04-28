@@ -1137,10 +1137,12 @@ async function pushUsersToServer() {
   }
 
   try {
+    // GAS saveUsers_는 u.pw 컬럼을 읽음. 프론트엔드는 password 필드도 사용하므로 정규화
+    const usersForGas = state.users.map(u => Object.assign({}, u, { pw: u.pw || u.password || '' }));
     await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: _apiPostBody({ action: 'saveUsers', users: state.users })
+      body: _apiPostBody({ action: 'saveUsers', users: usersForGas })
     });
   } catch(e) {}
 }
