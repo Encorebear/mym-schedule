@@ -2585,6 +2585,7 @@ function renderAuditLog(logs) {
 let autoSyncTimer = null;
 let autoSnapshotTimer = null;
 let syncInProgress = false; // 동기화 중복 실행 방지 락
+let _pushDebounceTimer = null; // saveAndSync debounce 타이머
 
 // ═══════════════════════════════════════════════════
 //  BACKUP & RESTORE (자동 스냅샷)
@@ -2723,12 +2724,21 @@ function restoreSnapshot(index) {
 
 function startAutoSync() {
   stopAutoSync();
-  // 2분마다 백그라운드 동기화 (30초는 너무 잦아 GAS 응답 불안정 시 데이터 손실 위험)
-  autoSyncTimer = setInterval(() => { syncFromServer(false); }, 120000);
+  // 5분마다 백그라운드 동기화 (GAS 일일 쿼터 절약)
+  autoSyncTimer = setInterval(() => {
+    if (document.visibilityState !== 'hidden') syncFromServer(false);
+  }, 300000);
 }
 function stopAutoSync() {
   if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
 }
+
+// 탭/앱이 다시 포그라운드로 돌아올 때만 즉시 sync
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.currentUser && state.apiUrl) {
+    syncFromServer(false);
+  }
+});
 
 async function manualSync() {
   const btn = document.getElementById('sync-btn');
@@ -2861,8 +2871,13 @@ async function pushAllToServer(showIndicator) {
 }
 
 function saveAndSync() {
-  saveEvents();
-  pushAllToServer(false);
+  saveEvents(); // 로컬 저장은 즉시
+  // push는 debounce: 3초 안에 연속 변경 시 마지막 1번만 서버 전송 (GAS 쿼터 절약)
+  if (_pushDebounceTimer) clearTimeout(_pushDebounceTimer);
+  _pushDebounceTimer = setTimeout(() => {
+    pushAllToServer(false);
+    _pushDebounceTimer = null;
+  }, 3000);
 }
 
 // 동기화 설정 패널
