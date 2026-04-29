@@ -2773,10 +2773,19 @@ async function syncFromServer(showIndicator) {
         const merged = deduped.map(serverEv => {
           const localEv = localMap[serverEv.id];
           if (!localEv) return serverEv; // 서버에만 있음 → 서버 버전
-          // 양쪽에 있으면 updatedAt 비교
+          // 양쪽에 있으면 updatedAt 비교 (같은 시각이면 로컬 우선 — GAS가 completed 등 일부 필드 미보존 방어)
           const serverTime = serverEv.updatedAt || '';
           const localTime  = localEv.updatedAt  || '';
-          return localTime > serverTime ? localEv : serverEv;
+          const base = localTime >= serverTime ? localEv : serverEv;
+          // 서버가 completed 필드를 보존하지 못한 경우 보호: 로컬에 completed=true인데 결과에 없으면 복원
+          if (localEv.completed && !base.completed) {
+            return Object.assign({}, base, {
+              completed:   localEv.completed,
+              completedAt: localEv.completedAt,
+              completedBy: localEv.completedBy
+            });
+          }
+          return base;
         });
 
         // 로컬에만 있는 이벤트(서버 미반영) 추가
