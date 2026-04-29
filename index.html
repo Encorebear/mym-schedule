@@ -773,7 +773,7 @@
           <button type="button" class="manager-btn" data-mgr="기타" onclick="selectManager('기타')">기타 (직접입력)</button>
         </div>
         <input type="hidden" id="form-manager">
-        <input type="text" class="form-input" id="form-manager-other" placeholder="매니저 이름 직접 입력" style="display:none;margin-top:4px;">
+        <input type="text" class="form-input" id="form-manager-other" placeholder="매니저 이름 직접 입력" style="display:none;margin-top:4px;" oninput="_updateManagerHidden()">
       </div>
       <div class="form-section">
         <label class="form-label">날짜</label>
@@ -1979,27 +1979,54 @@ function resetVehicleField() {
   document.getElementById('form-vehicle-other').value = '';
 }
 
-// ── 매니저 선택 ──
+// ── 매니저 선택 (복수선택 가능) ──
 const MANAGERS_PRESET = ['김종호', '강동현', '한호석'];
 
+function _updateManagerHidden() {
+  var selected = [];
+  document.querySelectorAll('.manager-btn.selected').forEach(function(b) {
+    var v = b.getAttribute('data-mgr');
+    if (v !== '기타') selected.push(v);
+  });
+  var 기타Btn = document.querySelector('.manager-btn[data-mgr="기타"]');
+  if (기타Btn && 기타Btn.classList.contains('selected')) {
+    var otherVal = (document.getElementById('form-manager-other').value || '').trim();
+    if (otherVal) selected.push(otherVal);
+  }
+  document.getElementById('form-manager').value = selected.join(', ');
+}
+
 function selectManager(val) {
-  document.querySelectorAll('.manager-btn').forEach(function(b) { b.classList.remove('selected'); });
   var btn = document.querySelector('.manager-btn[data-mgr="' + val + '"]');
-  if (btn) btn.classList.add('selected');
-  document.getElementById('form-manager').value = val;
-  var otherEl = document.getElementById('form-manager-other');
-  otherEl.style.display = (val === '기타') ? '' : 'none';
-  if (val !== '기타') otherEl.value = '';
+  if (!btn) return;
+  btn.classList.toggle('selected');
+  var isOn = btn.classList.contains('selected');
+  if (val === '기타') {
+    var otherEl = document.getElementById('form-manager-other');
+    otherEl.style.display = isOn ? '' : 'none';
+    if (!isOn) otherEl.value = '';
+  }
+  _updateManagerHidden();
 }
 
 function setManagerField(val) {
-  if (!val) { resetManagerField(); return; }
-  if (MANAGERS_PRESET.includes(val)) {
-    selectManager(val);
-  } else {
-    selectManager('기타');
-    document.getElementById('form-manager-other').value = val;
-  }
+  resetManagerField();
+  if (!val) return;
+  var parts = val.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  parts.forEach(function(part) {
+    var btn = document.querySelector('.manager-btn[data-mgr="' + part + '"]');
+    if (btn) {
+      btn.classList.add('selected');
+    } else {
+      // 프리셋에 없는 값 → 기타 선택 + 직접입력란에 추가
+      var 기타Btn = document.querySelector('.manager-btn[data-mgr="기타"]');
+      if (기타Btn) 기타Btn.classList.add('selected');
+      var otherEl = document.getElementById('form-manager-other');
+      otherEl.style.display = '';
+      otherEl.value = otherEl.value ? otherEl.value + ', ' + part : part;
+    }
+  });
+  document.getElementById('form-manager').value = val;
 }
 
 function resetManagerField() {
@@ -2071,10 +2098,9 @@ function submitEventForm(e) {
   var _vehOther  = document.getElementById('form-vehicle-other').value.trim();
   var _vehicleFinal = _vehChoice === '기타' ? (_vehOther || '기타') : _vehChoice;
 
-  // resolve manager value
-  var _mgrChoice = document.getElementById('form-manager').value;
-  var _mgrOther  = (document.getElementById('form-manager-other').value||'').trim();
-  var _managerFinal = _mgrChoice === '기타' ? (_mgrOther || '기타') : _mgrChoice;
+  // resolve manager value (복수선택 → hidden input에 이미 최종값 저장됨)
+  _updateManagerHidden();
+  var _managerFinal = document.getElementById('form-manager').value;
 
   const existing = editingId ? state.events.find(e=>e.id===editingId) : null;
   const ev={
