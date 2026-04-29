@@ -2570,7 +2570,7 @@ async function syncFromServer(showIndicator) {
         if (showIndicator) showToast('✅ 로컬 데이터 서버 저장 완료 (' + state.events.length + '개)');
       } else {
         // 서버 스키마 정규화: 구버전 GAS가 반환하는 필드명 통일
-        state.events = data.events.map(ev => {
+        const normalized = data.events.map(ev => {
           // actors(복수) → actor(단수) 변환 (배열이면 첫 번째 요소만 사용)
           if (!ev.actor && ev.actors) ev.actor = Array.isArray(ev.actors) ? ev.actors[0] : ev.actors;
           // id 없으면 생성
@@ -2579,9 +2579,23 @@ async function syncFromServer(showIndicator) {
           if (ev.staff && typeof ev.staff !== 'string') ev.staff = JSON.stringify(ev.staff);
           return ev;
         });
+        // 중복 id 제거 (GAS 시트에 중복 행이 있는 경우 방어)
+        const seen = new Set();
+        const deduped = normalized.filter(ev => {
+          if (seen.has(ev.id)) return false;
+          seen.add(ev.id);
+          return true;
+        });
+        const hadDuplicates = deduped.length < normalized.length;
+        state.events = deduped;
         saveEvents();
+        // 중복이 있었으면 서버 시트도 정리 (pushAllToServer로 덮어쓰기)
+        if (hadDuplicates) {
+          console.log('[sync] 중복 일정 ' + (normalized.length - deduped.length) + '개 제거, 서버 시트 정리 중...');
+          await pushAllToServer(false);
+        }
         renderCurrentView();
-        if (showIndicator) showToast('✅ 완료 (' + data.events.length + '개)');
+        if (showIndicator) showToast('✅ 완료 (' + deduped.length + '개' + (hadDuplicates ? ', 중복 ' + (normalized.length - deduped.length) + '개 정리됨' : '') + ')');
       }
     }
   } catch(e) {
