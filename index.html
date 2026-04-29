@@ -2532,6 +2532,7 @@ function renderAuditLog(logs) {
 //  SERVER SYNC (Google Apps Script)
 // ═══════════════════════════════════════════════════
 let autoSyncTimer = null;
+let syncInProgress = false; // 동기화 중복 실행 방지 락
 
 function startAutoSync() {
   stopAutoSync();
@@ -2556,6 +2557,12 @@ async function manualSync() {
 
 async function syncFromServer(showIndicator) {
   if (!state.apiUrl) return;
+  // 이미 동기화 진행 중이면 무시 (race condition 방지)
+  if (syncInProgress) {
+    if (showIndicator) showToast('🔄 이미 동기화 중입니다...');
+    return;
+  }
+  syncInProgress = true;
   if (showIndicator) showToast('🔄 불러오는 중...');
   try {
     const tok = encodeURIComponent(state.sessionToken || '');
@@ -2605,6 +2612,8 @@ async function syncFromServer(showIndicator) {
     }
   } catch(e) {
     if (showIndicator) showToast('❌ 실패: ' + e.message);
+  } finally {
+    syncInProgress = false; // 성공/실패 무관하게 락 해제
   }
 }
 
