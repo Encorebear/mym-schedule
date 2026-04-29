@@ -2587,13 +2587,18 @@ async function syncFromServer(showIndicator) {
           return true;
         });
         const hadDuplicates = deduped.length < normalized.length;
+        if (hadDuplicates) {
+          console.log('[sync] 중복 일정 감지: 서버 ' + normalized.length + '개 → 중복 제거 후 ' + deduped.length + '개');
+        }
+        // 안전 체크: 서버 데이터가 로컬보다 현저히 적으면 덮어쓰지 않음 (서버 오류 방어)
+        const localCount = state.events.length;
+        if (deduped.length === 0 && localCount > 0) {
+          console.warn('[sync] 서버 데이터 없음, 로컬 데이터 보존 (' + localCount + '개)');
+          if (showIndicator) showToast('⚠️ 서버에 데이터 없음. 로컬 데이터 유지 중...');
+          return;
+        }
         state.events = deduped;
         saveEvents();
-        // 중복이 있었으면 서버 시트도 정리 (pushAllToServer로 덮어쓰기)
-        if (hadDuplicates) {
-          console.log('[sync] 중복 일정 ' + (normalized.length - deduped.length) + '개 제거, 서버 시트 정리 중...');
-          await pushAllToServer(false);
-        }
         renderCurrentView();
         if (showIndicator) showToast('✅ 완료 (' + deduped.length + '개' + (hadDuplicates ? ', 중복 ' + (normalized.length - deduped.length) + '개 정리됨' : '') + ')');
       }
