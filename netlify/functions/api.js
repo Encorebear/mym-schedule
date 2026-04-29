@@ -188,6 +188,21 @@ exports.handler = async (event) => {
       } catch(e) { return fail(e.message); }
     }
 
+    // 진단용: Sheets API 직접 호출 테스트
+    if (action === 'testsheets') {
+      try {
+        const t = await getAccessToken();
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+        const r = await Promise.race([
+          fetch(url, { headers: { Authorization: `Bearer ${t}` } }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout 10s')), 10000))
+        ]);
+        const data = await r.json();
+        const sheets = (data.sheets || []).map(s => s.properties && s.properties.title);
+        return ok({ spreadsheetId: SPREADSHEET_ID, sheets, status: r.status });
+      } catch(e) { return fail(e.message); }
+    }
+
     const token = await getAccessToken();
 
     // LOGIN
