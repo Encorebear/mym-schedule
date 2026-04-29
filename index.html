@@ -1085,6 +1085,8 @@ const STORAGE_KEY   = 'mym_events_v1';
 const USERS_KEY     = 'mym_users_v1';
 const SETTINGS_KEY  = 'mym_settings_v1';
 const SESSION_KEY   = 'mym_session_v1';
+const BACKUPS_KEY   = 'mym_backups_v1';  // 자동 스냅샷 저장소
+const MAX_BACKUPS   = 10;                // 최대 보관 스냅샷 수
 const API_KEY       = '';   // 실제 키는 Netlify 환경변수에 저장 (서버에서만 사용)
 const DEFAULT_API   = '/.netlify/functions/api'; // 프록시를 통해 GAS URL 숨김
 
@@ -1307,7 +1309,8 @@ function startApp() {
   renderCurrentView();
   document.getElementById('bottom-nav').style.display = 'flex';
   document.getElementById('main-app').style.paddingBottom = '56px';
-  if (state.apiUrl) { loadUsersFromServer(); syncFromServer(false); startAutoSync(); loadCarRecords(false); }
+  if (state.apiUrl) { loadUsersFromServer(); syncFromServer(false); startAutoSync(); startAutoSnapshot(); loadCarRecords(false); }
+  else { startAutoSnapshot(); }
 }
 
 // ═══════════════════════════════════════════════════
@@ -2112,6 +2115,8 @@ function openUserMenu() {
       <span class="menu-icon">📥</span> 서버 → 이 기기 다운로드 <span class="menu-arrow">›</span></div>`;
     html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openAdmin()">
       <span class="menu-icon">👑</span> 계정 관리 <span class="menu-arrow">›</span></div>`;
+    html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openBackupSheet()">
+      <span class="menu-icon">🔒</span> 백업 & 복구 <span class="menu-arrow">›</span></div>`;
     html+=`<div class="menu-item" onclick="hideSheet('user-menu-sheet');openAuditLog()">
       <span class="menu-icon">📋</span> 감사 로그 <span class="menu-arrow">›</span></div>`;
   } else {
@@ -2532,7 +2537,103 @@ function renderAuditLog(logs) {
 //  SERVER SYNC (Google Apps Script)
 // ═══════════════════════════════════════════════════
 let autoSyncTimer = null;
+let autoSnapshotTimer = null;
 let syncInProgress = false; // 동기화 중복 실행 방지 락
+
+// ═══════════════════════════════════════════════════
+//  BACKUP & RESTORE (자동 스냅샷)
+// ═══════════════════════════════════════════════════
+
+function saveSnapshot(label) {
+  if (!state.events || state.events.length === 0) return;
+  try {
+    const backups = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]');
+    backups.unshift({
+      timestamp: new Date().toISOString(),
+      label: label || '자동',
+      count: state.events.length,
+      events: JSON.parse(JSON.stringify(state.events)) // deep copy
+    });
+    // 최대 MAX_BACKUPS개만 보관
+    if (backups.length > MAX_BACKUPS) backups.splice(MAX_BACKUPS);
+    localStorage.setItem(BACKUPS_KEY, JSON.stringify(backups));
+  } catch(e) { console.warn('[backup] 스냅샷 저장 실패:', e); }
+}
+
+function startAutoSnapshot() {
+  if (autoSnapshotTimer) clearInterval(autoSnapshotTimer);
+  // 10분마다 자동 스냅샷
+  autoSnapshotTimer = setInterval(() => {
+    if (state.events && state.events.length > 0) saveSnapshot('자동');
+  }, 600000);
+}
+
+function openBackupSheet() {
+  hideSheet('admin-sheet');
+  let backups = [];
+  try { backups = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]'); } catch(e) {}
+
+  const fmt = ts => {
+    const d = new Date(ts);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const rows = backups.length
+    ? backups.map((b, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:14px;font-weight:600">${fmt(b.timestamp)} <span style="font-size:11px;color:var(--text3);font-weight:400">[${b.label}]</span></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">일정 ${b.count}개</div>
+        </div>
+        <button onclick="restoreSnapshot(${i})"
+          style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer">
+          복구
+        </button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">저장된 백업이 없습니다</div>';
+
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet active';
+  sheet.id = 'backup-sheet';
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">🔒 백업 & 복구</div>
+      <button class="sheet-close" onclick="hideSheet('backup-sheet');document.getElementById('backup-sheet').remove()">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+        최근 ${MAX_BACKUPS}개 스냅샷 보관 · 10분마다 자동저장 · 동기화 직전 자동저장
+      </div>
+      <button onclick="saveSnapshot('수동');openBackupSheet()"
+        style="width:100%;background:var(--bg4);border:1px solid var(--border);color:var(--text1);border-radius:10px;padding:10px;font-size:13px;cursor:pointer;margin-bottom:12px">
+        📸 지금 즉시 백업
+      </button>
+      ${rows}
+    </div>`;
+  // 기존 시트 제거 후 추가
+  const existing = document.getElementById('backup-sheet');
+  if (existing) existing.remove();
+  document.body.appendChild(sheet);
+}
+
+function restoreSnapshot(index) {
+  let backups = [];
+  try { backups = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]'); } catch(e) {}
+  const backup = backups[index];
+  if (!backup) { showToast('백업을 찾을 수 없습니다'); return; }
+  if (!confirm(`${new Date(backup.timestamp).toLocaleString('ko-KR')} 백업으로 복구하시겠습니까?\n일정 ${backup.count}개가 복원됩니다.`)) return;
+  // 복구 전 현재 상태도 스냅샷
+  saveSnapshot('복구 전 자동저장');
+  state.events = JSON.parse(JSON.stringify(backup.events));
+  saveEvents();
+  pushAllToServer(false);
+  renderCurrentView();
+  hideSheet('backup-sheet');
+  const el = document.getElementById('backup-sheet');
+  if (el) el.remove();
+  showToast(`✅ 복구 완료 (일정 ${backup.count}개)`);
+}
 
 function startAutoSync() {
   stopAutoSync();
@@ -2563,6 +2664,8 @@ async function syncFromServer(showIndicator) {
     return;
   }
   syncInProgress = true;
+  // 동기화 직전 스냅샷 (데이터 손실 대비)
+  saveSnapshot('동기화 전');
   if (showIndicator) showToast('🔄 불러오는 중...');
   try {
     const tok = encodeURIComponent(state.sessionToken || '');
