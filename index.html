@@ -1761,7 +1761,8 @@ function initStaffTags(existingStaff) {
   STAFF_CATS.forEach(c => staffData[c] = []);
   if (existingStaff) {
     try {
-      const parsed = JSON.parse(existingStaff);
+      // staff가 이미 객체인 경우(GAS에서 파싱되어 반환된 경우) 직접 사용, 문자열이면 JSON.parse
+      const parsed = typeof existingStaff === 'string' ? JSON.parse(existingStaff) : existingStaff;
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         STAFF_CATS.forEach(c => {
           staffData[c] = Array.isArray(parsed[c])
@@ -1770,7 +1771,8 @@ function initStaffTags(existingStaff) {
         });
       }
     } catch(e) {
-      if (existingStaff.trim()) staffData['기타'] = [existingStaff.trim()];
+      // 문자열인 경우만 기타에 추가 (객체일 경우 .trim() 에러 방지)
+      if (typeof existingStaff === 'string' && existingStaff.trim()) staffData['기타'] = [existingStaff.trim()];
     }
   }
   renderStaffTags();
@@ -1987,8 +1989,9 @@ function resetManagerField() {
 function formatStaffDisplay(staffJson) {
   if (!staffJson) return '';
   try {
-    const obj = JSON.parse(staffJson);
-    if (typeof obj !== 'object' || Array.isArray(obj)) return `<div>${staffJson}</div>`;
+    // staff가 이미 객체인 경우(GAS에서 파싱되어 반환) 직접 사용, 문자열이면 JSON.parse
+    const obj = typeof staffJson === 'string' ? JSON.parse(staffJson) : staffJson;
+    if (typeof obj !== 'object' || Array.isArray(obj)) return typeof staffJson === 'string' ? `<div>${staffJson}</div>` : '';
     return STAFF_CATS
       .filter(c => obj[c] && obj[c].length)
       .map(c => {
@@ -2004,7 +2007,7 @@ function formatStaffDisplay(staffJson) {
       })
       .join('');
   } catch(e) {
-    return staffJson ? `<div>${staffJson}</div>` : '';
+    return typeof staffJson === 'string' && staffJson ? `<div>${staffJson}</div>` : '';
   }
 }
 
@@ -2568,10 +2571,12 @@ async function syncFromServer(showIndicator) {
       } else {
         // 서버 스키마 정규화: 구버전 GAS가 반환하는 필드명 통일
         state.events = data.events.map(ev => {
-          // actors(복수) → actor(단수) 변환
-          if (!ev.actor && ev.actors) ev.actor = ev.actors;
+          // actors(복수) → actor(단수) 변환 (배열이면 첫 번째 요소만 사용)
+          if (!ev.actor && ev.actors) ev.actor = Array.isArray(ev.actors) ? ev.actors[0] : ev.actors;
           // id 없으면 생성
           if (!ev.id) ev.id = 'sv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+          // staff가 객체로 반환된 경우 JSON 문자열로 변환 (initStaffTags/formatStaffDisplay 호환)
+          if (ev.staff && typeof ev.staff !== 'string') ev.staff = JSON.stringify(ev.staff);
           return ev;
         });
         saveEvents();
