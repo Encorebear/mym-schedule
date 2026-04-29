@@ -790,7 +790,7 @@
           <button type="button" class="type-select-btn" data-type="홍보" onclick="selectFormType('홍보')">📸<br>홍보</button>
           <button type="button" class="type-select-btn" data-type="광고" onclick="selectFormType('광고')">📢<br>광고</button>
           <button type="button" class="type-select-btn" data-type="기타" onclick="selectFormType('기타')">📌<br>기타</button>
-          <button type="button" class="type-select-btn" id="type-btn-private" data-type="비공개" onclick="selectFormType('비공개')" style="grid-column:span 4;border-color:rgba(239,68,68,0.3);color:#ef4444;">🔒 비공개 &nbsp;<span style="font-size:10px;color:var(--text3);font-weight:400;">배우·시간 공개 / 세부내용 비공개</span></button>
+          <button type="button" class="type-select-btn" id="type-btn-private" data-type="비공개" onclick="selectFormType('비공개')" style="grid-column:span 4;border-color:rgba(239,68,68,0.3);color:#ef4444;">🔒 비공개 &nbsp;<span style="font-size:10px;color:var(--text3);font-weight:400;">배우·시간·매니저 공개 / 세부내용 비공개</span></button>
         </div>
         <input type="hidden" id="form-type" required>
       </div>
@@ -1442,7 +1442,8 @@ function renderCalendar() {
       const donePrefix = ev.completed ? '✅ ' : '';
       if (isPrivate) {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
-        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 [${ev.actor}] ${timePart}</div>`;
+        const managerPart = ev.manager ? ` · 👤${ev.manager}` : '';
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 [${ev.actor}] ${timePart}${managerPart}</div>`;
       } else {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
         const mainLabel = `${donePrefix}[${ev.actor}] ${timePart}${ev.title}`;
