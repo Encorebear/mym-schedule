@@ -1442,8 +1442,13 @@ function renderCalendar() {
       const donePrefix = ev.completed ? '✅ ' : '';
       if (isPrivate) {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
-        const managerPart = ev.manager ? ` · 👤${ev.manager}` : '';
-        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;">🔒 [${ev.actor}] ${timePart}${managerPart}</div>`;
+        const mgrSpan = ev.manager
+          ? `<span style="flex-shrink:0;margin-left:3px;opacity:0.9;">${ev.manager}</span>`
+          : '';
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:2px;">` +
+          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">🔒 [${ev.actor}] ${timePart}</span>` +
+          mgrSpan +
+          `</div>`;
       } else {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
         const mainLabel = `${donePrefix}[${ev.actor}] ${timePart}${ev.title}`;
