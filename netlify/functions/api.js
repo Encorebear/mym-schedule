@@ -165,6 +165,29 @@ exports.handler = async (event) => {
 
     if (action === 'ping') return ok({ version: 'v11-direct' });
 
+    // 진단용: JWT 서명 테스트 (네트워크 호출 없음)
+    if (action === 'testkey') {
+      try {
+        const keyPreview = PRIVATE_KEY.slice(0, 50) + '...' + PRIVATE_KEY.slice(-20);
+        const hasBegin = PRIVATE_KEY.includes('-----BEGIN PRIVATE KEY-----');
+        const hasEnd   = PRIVATE_KEY.includes('-----END PRIVATE KEY-----');
+        let jwtOk = false, jwtErr = '';
+        try { makeJWT(); jwtOk = true; } catch(e) { jwtErr = e.message; }
+        return ok({ keyLen: PRIVATE_KEY.length, hasBegin, hasEnd, jwtOk, jwtErr, keyPreview });
+      } catch(e) { return fail(e.message); }
+    }
+
+    // 진단용: OAuth 토큰 발급 테스트
+    if (action === 'testtoken') {
+      try {
+        const t = await Promise.race([
+          getAccessToken(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout 10s')), 10000))
+        ]);
+        return ok({ tokenLen: t.length, tokenPreview: t.slice(0, 20) + '...' });
+      } catch(e) { return fail(e.message); }
+    }
+
     const token = await getAccessToken();
 
     // LOGIN
