@@ -22,8 +22,23 @@ const DEFAULT_USER_HEADERS  = ['id','name','password','role'];
 const DEFAULT_AUDIT_HEADERS = ['timestamp','userId','auditAction','eventId','actor','title','date','details'];
 const DEFAULT_CAR_HEADERS   = ['id','date','vehicle','plate','type','handler','amount','memo'];
 
-// ── JWT + 액세스 토큰 (인메모리 캐시) ──
-let _tokenCache = null;
+// ── 인메모리 캐시 (시트 데이터 + 액세스 토큰) ──
+// Netlify 함수는 컨테이너가 재사용되므로 캐시가 실제로 작동함
+let _tokenCache  = null;
+const _sheetCache = {};          // { [sheetName]: { data, headers, exp } }
+const CACHE_TTL_EVENTS = 30000;  // 이벤트: 30초
+const CACHE_TTL_USERS  = 120000; // 사용자: 2분
+
+function getCached(sheetName) {
+  const c = _sheetCache[sheetName];
+  return (c && c.exp > Date.now()) ? c : null;
+}
+function setCached(sheetName, headers, data, ttl) {
+  _sheetCache[sheetName] = { headers, data, exp: Date.now() + ttl };
+}
+function invalidate(sheetName) {
+  delete _sheetCache[sheetName];
+}
 
 function makeJWT() {
   const now = Math.floor(Date.now() / 1000);
@@ -97,8 +112,12 @@ async function sheetsAppend(token, range, values) {
 }
 
 // ── 시트 읽기 / 쓰기 헬퍼 ──
-async function readSheet(token, sheetName) {
+async function readSheet(token, sheetName, ttl) {
+  const cached = getCached(sheetName);
+  if (cached) return { headers: cached.headers, data: cached.data };
+
   const data = await sheetsGet(token, sheetName);
+  if (data.error) throw new Error(`Sheets API 오류: ${data.error.message} (${data.error.code})`);
   const rows = data.values || [];
   if (rows.length < 1) return { headers: [], data: [] };
   const headers = rows[0];
@@ -109,6 +128,7 @@ async function readSheet(token, sheetName) {
       return obj;
     })
     .filter(obj => Object.values(obj).some(v => v !== ''));
+  if (ttl) setCached(sheetName, headers, objs, ttl);
   return { headers, data: objs };
 }
 
@@ -207,7 +227,7 @@ exports.handler = async (event) => {
     // LOGIN
     if (action === 'login') {
       const { username, password } = body;
-      const { data: users } = await readSheet(token, SHEET_USERS);
+      const { data: users } = await readSheet(token, SHEET_USERS, CACHE_TTL_USERS);
       const user = users.find(u => (u.name === username || u.id === username) && u.password === password);
       if (!user) return fail('아이디 또는 비밀번호가 올바르지 않습니다.');
       const sessionToken = Buffer.from(`${username}:${Date.now()}`).toString('base64');
@@ -217,7 +237,7 @@ exports.handler = async (event) => {
 
     // LOAD EVENTS
     if (action === 'load') {
-      const { data: events } = await readSheet(token, SHEET_EVENTS);
+      const { data: events } = await readSheet(token, SHEET_EVENTS, CACHE_TTL_EVENTS);
       const normalized = events
         .map(ev => ({
           ...ev,
@@ -233,12 +253,13 @@ exports.handler = async (event) => {
       const events  = body.events || [];
       const headers = await getHeaders(token, SHEET_EVENTS, DEFAULT_EVENT_HEADERS);
       await writeSheet(token, SHEET_EVENTS, events, headers);
+      invalidate(SHEET_EVENTS);
       return ok({ saved: events.length });
     }
 
     // LOAD USERS
     if (action === 'loadUsers') {
-      const { data: users } = await readSheet(token, SHEET_USERS);
+      const { data: users } = await readSheet(token, SHEET_USERS, CACHE_TTL_USERS);
       return ok({ users: users.map(({ password: _pw, ...u }) => u) });
     }
 
@@ -247,6 +268,7 @@ exports.handler = async (event) => {
       const users   = body.users || [];
       const headers = await getHeaders(token, SHEET_USERS, DEFAULT_USER_HEADERS);
       await writeSheet(token, SHEET_USERS, users, headers);
+      invalidate(SHEET_USERS);
       return ok({ saved: users.length });
     }
 
