@@ -1664,6 +1664,7 @@ function completeEvent(id, ds) {
     ev.completed = true;
     ev.completedAt = new Date().toISOString();
     ev.completedBy = state.currentUser ? state.currentUser.id : '';
+    ev.updatedAt = new Date().toISOString(); // 병합 시 최신 버전 판별용
     logAudit('완료', ev);
     saveAndSync();
     renderCurrentView();
@@ -1679,6 +1680,7 @@ function uncompleteEvent(id, ds) {
   ev.completed = false;
   delete ev.completedAt;
   delete ev.completedBy;
+  ev.updatedAt = new Date().toISOString(); // 병합 시 최신 버전 판별용
   logAudit('완료취소', ev);
   saveAndSync();
   renderCurrentView();
@@ -2707,14 +2709,31 @@ async function syncFromServer(showIndicator) {
           if (showIndicator) showToast('⚠️ 서버에 데이터 없음. 로컬 데이터 유지 중...');
           return;
         }
-        // 병합: 서버 데이터를 기준으로 하되, 로컬에만 있는 이벤트는 살림
-        // (서버 응답이 불안정할 때 로컬 데이터 손실 방지)
+        // 병합: 서버 + 로컬 스마트 병합
+        // - 서버에만 있는 이벤트 → 추가
+        // - 로컬에만 있는 이벤트 → 보존 (서버 미반영 신규 이벤트)
+        // - 양쪽에 모두 있는 이벤트 → updatedAt 비교해서 더 최신 버전 사용
+        //   (완료처리, 수정 등이 서버에 반영되기 전 sync해도 로컬 변경 보존)
+        const localMap = {};
+        state.events.forEach(ev => { if (ev.id) localMap[ev.id] = ev; });
         const serverIds = new Set(deduped.map(ev => ev.id));
+
+        const merged = deduped.map(serverEv => {
+          const localEv = localMap[serverEv.id];
+          if (!localEv) return serverEv; // 서버에만 있음 → 서버 버전
+          // 양쪽에 있으면 updatedAt 비교
+          const serverTime = serverEv.updatedAt || '';
+          const localTime  = localEv.updatedAt  || '';
+          return localTime > serverTime ? localEv : serverEv;
+        });
+
+        // 로컬에만 있는 이벤트(서버 미반영) 추가
         const localOnlyEvents = state.events.filter(ev => ev.id && !serverIds.has(ev.id));
         if (localOnlyEvents.length > 0) {
           console.log('[sync] 로컬 전용 이벤트 ' + localOnlyEvents.length + '개 병합 보존');
+          merged.push(...localOnlyEvents);
         }
-        const merged = [...deduped, ...localOnlyEvents];
+
         state.events = merged;
         saveEvents();
         renderCurrentView();
