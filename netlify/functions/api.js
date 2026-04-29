@@ -198,10 +198,7 @@ exports.handler = async (event) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout 25s')), 25000))
         ]);
         const text = await r.text();
-        let data;
-        try { data = JSON.parse(text); } catch(e) { return ok({ status: r.status, rawText: text.slice(0, 300) }); }
-        const sheets = (data.sheets || []).map(s => s.properties && s.properties.title);
-        return ok({ spreadsheetId: SPREADSHEET_ID, sheets, status: r.status, error: data.error });
+        return ok({ status: r.status, rawText: text.slice(0, 500) });
       } catch(e) { return fail(e.message); }
     }
 
