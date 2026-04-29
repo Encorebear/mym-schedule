@@ -2665,14 +2665,53 @@ function restoreSnapshot(index) {
   try { backups = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]'); } catch(e) {}
   const backup = backups[index];
   if (!backup) { showToast('백업을 찾을 수 없습니다'); return; }
-  if (!confirm(`${new Date(backup.timestamp).toLocaleString('ko-KR')} 백업으로 복구하시겠습니까?\n일정 ${backup.count}개가 복원됩니다.`)) return;
-  // 복구 전 현재 상태도 스냅샷
+
+  // confirm() 대신 앱 내 확인 패널 표시
+  const d = new Date(backup.timestamp);
+  const dateStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const currentCount = state.events ? state.events.length : 0;
+  const diff = backup.count - currentCount;
+  const diffMsg = diff === 0 ? '현재와 동일한 개수' : diff > 0 ? `현재보다 ${diff}개 더 많음` : `현재보다 ${Math.abs(diff)}개 적음`;
+
+  // 기존 확인 패널 제거
+  const old = document.getElementById('restore-confirm-panel');
+  if (old) old.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'restore-confirm-panel';
+  panel.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--bg2);border-top:2px solid var(--accent);padding:20px;box-shadow:0 -4px 20px rgba(0,0,0,0.3)';
+  panel.innerHTML = `
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px">⚠️ 이 백업으로 복구할까요?</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:4px">📅 ${dateStr} 저장본 [${backup.label}]</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">일정 <b>${backup.count}개</b> — ${diffMsg}</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="document.getElementById('restore-confirm-panel').remove()"
+        style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg4);color:var(--text1);font-size:14px;cursor:pointer">
+        취소
+      </button>
+      <button onclick="doRestoreSnapshot(${index})"
+        style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">
+        복구하기
+      </button>
+    </div>`;
+  document.body.appendChild(panel);
+}
+
+function doRestoreSnapshot(index) {
+  const panel = document.getElementById('restore-confirm-panel');
+  if (panel) panel.remove();
+
+  let backups = [];
+  try { backups = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]'); } catch(e) {}
+  const backup = backups[index];
+  if (!backup) { showToast('백업을 찾을 수 없습니다'); return; }
+
+  // 복구 전 현재 상태 스냅샷
   saveSnapshot('복구 전 자동저장');
   state.events = JSON.parse(JSON.stringify(backup.events));
   saveEvents();
   pushAllToServer(false);
   renderCurrentView();
-  hideSheet('backup-sheet');
   const el = document.getElementById('backup-sheet');
   if (el) el.remove();
   showToast(`✅ 복구 완료 (일정 ${backup.count}개)`);
