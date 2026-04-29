@@ -2724,10 +2724,10 @@ function restoreSnapshot(index) {
 
 function startAutoSync() {
   stopAutoSync();
-  // 5분마다 백그라운드 동기화 (GAS 일일 쿼터 절약)
+  // 2분마다 동기화 — 단, 탭이 숨겨져 있으면 스킵 (GAS 쿼터 절약)
   autoSyncTimer = setInterval(() => {
     if (document.visibilityState !== 'hidden') syncFromServer(false);
-  }, 300000);
+  }, 120000);
 }
 function stopAutoSync() {
   if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
