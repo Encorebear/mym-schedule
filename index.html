@@ -2536,8 +2536,8 @@ let syncInProgress = false; // 동기화 중복 실행 방지 락
 
 function startAutoSync() {
   stopAutoSync();
-  // 30초마다 백그라운드 동기화
-  autoSyncTimer = setInterval(() => { syncFromServer(false); }, 30000);
+  // 2분마다 백그라운드 동기화 (30초는 너무 잦아 GAS 응답 불안정 시 데이터 손실 위험)
+  autoSyncTimer = setInterval(() => { syncFromServer(false); }, 120000);
 }
 function stopAutoSync() {
   if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
@@ -2597,17 +2597,27 @@ async function syncFromServer(showIndicator) {
         if (hadDuplicates) {
           console.log('[sync] 중복 일정 감지: 서버 ' + normalized.length + '개 → 중복 제거 후 ' + deduped.length + '개');
         }
-        // 안전 체크: 서버 데이터가 로컬보다 현저히 적으면 덮어쓰지 않음 (서버 오류 방어)
+        // 안전 체크: 서버가 완전히 비어있으면 로컬 보존
         const localCount = state.events.length;
         if (deduped.length === 0 && localCount > 0) {
           console.warn('[sync] 서버 데이터 없음, 로컬 데이터 보존 (' + localCount + '개)');
           if (showIndicator) showToast('⚠️ 서버에 데이터 없음. 로컬 데이터 유지 중...');
           return;
         }
-        state.events = deduped;
+        // 병합: 서버 데이터를 기준으로 하되, 로컬에만 있는 이벤트는 살림
+        // (서버 응답이 불안정할 때 로컬 데이터 손실 방지)
+        const serverIds = new Set(deduped.map(ev => ev.id));
+        const localOnlyEvents = state.events.filter(ev => ev.id && !serverIds.has(ev.id));
+        if (localOnlyEvents.length > 0) {
+          console.log('[sync] 로컬 전용 이벤트 ' + localOnlyEvents.length + '개 병합 보존');
+        }
+        const merged = [...deduped, ...localOnlyEvents];
+        state.events = merged;
         saveEvents();
         renderCurrentView();
-        if (showIndicator) showToast('✅ 완료 (' + deduped.length + '개' + (hadDuplicates ? ', 중복 ' + (normalized.length - deduped.length) + '개 정리됨' : '') + ')');
+        const extra = (hadDuplicates ? ', 중복 ' + (normalized.length - deduped.length) + '개 정리' : '') +
+                      (localOnlyEvents.length > 0 ? ', 로컬 ' + localOnlyEvents.length + '개 병합' : '');
+        if (showIndicator) showToast('✅ 완료 (' + merged.length + '개' + extra + ')');
       }
     }
   } catch(e) {
