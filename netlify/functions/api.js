@@ -5,7 +5,20 @@ const { google } = require('googleapis');
 
 const SPREADSHEET_ID   = process.env.SPREADSHEET_ID;
 const CLIENT_EMAIL     = process.env.GOOGLE_CLIENT_EMAIL;
-const PRIVATE_KEY      = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+
+// private key 형식 정규화 (Netlify 환경변수 줄바꿈 방식 다양하게 대응)
+function parsePrivateKey(raw) {
+  if (!raw) return '';
+  let key = raw;
+  // JSON 이스케이프된 \n → 실제 줄바꿈
+  key = key.replace(/\\n/g, '\n');
+  // Windows 줄바꿈 정규화
+  key = key.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // 앞뒤 따옴표 제거 (실수로 붙여넣은 경우)
+  key = key.replace(/^["']|["']$/g, '').trim();
+  return key;
+}
+const PRIVATE_KEY = parsePrivateKey(process.env.GOOGLE_PRIVATE_KEY);
 
 // ── 시트 탭 이름 (실제 스프레드시트와 다르면 환경변수로 덮어쓰기 가능) ──
 const SHEET_EVENTS = process.env.SHEET_EVENTS || '이벤트';
