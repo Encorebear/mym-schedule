@@ -192,14 +192,16 @@ exports.handler = async (event) => {
     if (action === 'testsheets') {
       try {
         const t = await getAccessToken();
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties.title`;
         const r = await Promise.race([
           fetch(url, { headers: { Authorization: `Bearer ${t}` } }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout 10s')), 10000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout 25s')), 25000))
         ]);
-        const data = await r.json();
+        const text = await r.text();
+        let data;
+        try { data = JSON.parse(text); } catch(e) { return ok({ status: r.status, rawText: text.slice(0, 300) }); }
         const sheets = (data.sheets || []).map(s => s.properties && s.properties.title);
-        return ok({ spreadsheetId: SPREADSHEET_ID, sheets, status: r.status });
+        return ok({ spreadsheetId: SPREADSHEET_ID, sheets, status: r.status, error: data.error });
       } catch(e) { return fail(e.message); }
     }
 
