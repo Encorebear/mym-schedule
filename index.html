@@ -1717,6 +1717,7 @@ function closeDaySheet() { hideSheet('day-sheet'); }
 //  FORM
 // ═══════════════════════════════════════════════════
 let editingId=null;
+let _editingSnapshot=null; // 수정 전 이벤트 스냅샷 (감사로그 before 용)
 
 function buildFormActorGrid() {
   const user=state.currentUser;
@@ -1759,6 +1760,7 @@ function openEditSheet(id) {
   if (!canEdit()) return;
   const ev=state.events.find(e=>e.id===id); if(!ev) return;
   editingId=id;
+  _editingSnapshot=JSON.parse(JSON.stringify(ev)); // 수정 전 상태 딥카피 보관
   document.getElementById('form-event-id').value=id;
   document.getElementById('form-sheet-title').textContent='일정 수정';
   document.getElementById('form-submit-btn').textContent='수정 완료';
@@ -2108,7 +2110,7 @@ function submitEventForm(e) {
   _updateManagerHidden();
   var _managerFinal = document.getElementById('form-manager').value;
 
-  const existing = editingId ? state.events.find(e=>e.id===editingId) : null;
+  const existing = _editingSnapshot; // openEditSheet에서 저장한 딥카피 사용
   const ev={
     id: editingId||'ev_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
     actor, date, type, title,
@@ -2127,6 +2129,7 @@ function submitEventForm(e) {
     const idx=state.events.findIndex(e=>e.id===editingId);
     if(idx!==-1) state.events[idx]=ev;
     logAudit('수정', ev, existing);
+    _editingSnapshot=null;
     showToast('수정되었습니다');
   } else {
     state.events.push(ev);
@@ -2552,20 +2555,47 @@ function renderAuditLog(logs) {
     const actor = actor_ ? `<span style="font-size:11px;color:${(ACTORS[actor_]||{}).color||'#64748b'};background:${(ACTORS[actor_]||{}).color||'#64748b'}22;padding:1px 6px;border-radius:8px;margin-right:4px;">${actor_}</span>` : '';
 
     let detailHtml = '';
-    if (details_ && actionType_ === '수정') {
+    if (details_) {
       try {
         const d = JSON.parse(details_);
-        const diffs = [];
-        const fields = {title:'제목',date:'날짜',startTime:'시작',endTime:'종료',location:'장소',memo:'메모',manager:'담당자',type:'유형'};
-        // { before, after } 또는 { _before, ...after } 형식 모두 지원
-        const before_ = d.before || d._before || {};
-        const after_ = d.after ? d.after : (d._before ? (()=>{const c={...d};delete c._before;return c;})() : d);
-        Object.entries(fields).forEach(([k, label]) => {
-          if (before_[k] !== after_[k]) {
-            diffs.push(`<span style="color:var(--text3)">${label}:</span> <span style="color:#ef4444;text-decoration:line-through">${before_[k]||'-'}</span> → <span style="color:#22c55e">${after_[k]||'-'}</span>`);
+        if (actionType_ === '수정') {
+          // before/after 구조가 있을 때만 diff 표시
+          if (d.before && d.after) {
+            const diffs = [];
+            const fields = {
+              actor:'배우', type:'유형', title:'제목', date:'날짜',
+              startTime:'시작시간', endTime:'종료시간', location:'장소',
+              manager:'담당자', vehicle:'차량', memo:'메모'
+            };
+            Object.entries(fields).forEach(([k, label]) => {
+              const bv = String(d.before[k]||'');
+              const av = String(d.after[k]||'');
+              if (bv !== av) {
+                diffs.push(`<span style="color:var(--text3);min-width:52px;display:inline-block;">${label}</span> <span style="color:#ef4444;text-decoration:line-through;margin-right:4px;">${bv||'-'}</span><span style="color:var(--text3)">→</span> <span style="color:#22c55e;margin-left:4px;">${av||'-'}</span>`);
+              }
+            });
+            if (diffs.length) {
+              detailHtml = `<div style="font-size:11px;line-height:2;margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:6px;">${diffs.join('<br>')}</div>`;
+            } else {
+              detailHtml = `<div style="font-size:11px;color:var(--text3);margin-top:4px;">변경된 항목 없음</div>`;
+            }
           }
-        });
-        if (diffs.length) detailHtml = `<div style="font-size:11px;line-height:1.8;margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:6px;">${diffs.join('<br>')}</div>`;
+        } else if (actionType_ === '삭제') {
+          // 삭제된 이벤트의 핵심 정보 표시
+          const ev = d.before || d;
+          const t = ev.startTime ? (ev.endTime ? `${ev.startTime}~${ev.endTime}` : ev.startTime) : '';
+          const parts = [];
+          if (ev.actor) parts.push(`<span style="color:${(ACTORS[ev.actor]||{}).color||'#64748b'}">${ev.actor}</span>`);
+          if (ev.type)  parts.push(`${EVENT_TYPES[ev.type]||''} ${ev.type}`);
+          if (ev.date)  parts.push(`📅 ${ev.date}`);
+          if (t)        parts.push(`🕐 ${t}`);
+          if (ev.location) parts.push(`📍 ${ev.location}`);
+          if (ev.manager)  parts.push(`👤 ${ev.manager}`);
+          if (ev.memo)     parts.push(`📝 ${ev.memo}`);
+          if (parts.length) {
+            detailHtml = `<div style="font-size:11px;line-height:1.8;margin-top:6px;padding:6px 8px;background:rgba(239,68,68,0.06);border-radius:6px;border:1px solid rgba(239,68,68,0.15);">${parts.join(' &nbsp;·&nbsp; ')}</div>`;
+          }
+        }
       } catch(e) {}
     }
 
