@@ -2533,7 +2533,7 @@ function renderAuditLog(logs) {
 
   sorted.forEach(log => {
     // GAS 반환 필드명 정규화 (action→actionType, eventTitle→title, detail→details)
-    const actionType_ = log.actionType || log.action || '';
+    const actionType_ = log.auditAction || log.actionType || log.action || '';
     const title_ = log.title || log.eventTitle || '(제목없음)';
     const details_ = log.details || log.detail || '';
     // actor/date: 직접 필드 또는 detail JSON에서 파싱
