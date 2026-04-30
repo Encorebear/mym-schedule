@@ -1237,18 +1237,20 @@ async function doLogin() {
 
     clearFailedAttempts(id);
     // 비밀번호 없는 사용자 정보 + 세션 토큰만 저장
+    // 신규 API: data.user.{id,name,role} / 구버전: data.userId, data.role 등
+    const u = data.user || {};
     state.currentUser = {
-      id:      data.userId,
-      role:    data.role,
-      label:   data.label,
-      actors:  data.actors || [],
-      canEdit: data.canEdit !== false
+      id:      u.id      || data.userId || id,
+      role:    u.role    || data.role   || 'user',
+      label:   u.name    || u.label     || data.label || id,
+      actors:  u.actors  || data.actors || [],
+      canEdit: data.canEdit !== undefined ? data.canEdit !== false : true
     };
     state._sessionPw = pw; // 비밀번호 변경 검증용 (메모리에만 보관, localStorage 저장 안 함)
-    state.sessionToken = data.token;
+    state.sessionToken = data.sessionToken || data.token;
 
     const store = remember ? localStorage : sessionStorage;
-    store.setItem(SESSION_KEY, JSON.stringify({ user: state.currentUser, token: data.token, remember }));
+    store.setItem(SESSION_KEY, JSON.stringify({ user: state.currentUser, token: state.sessionToken, remember }));
     if (!remember) localStorage.removeItem(SESSION_KEY);
     errEl.textContent = '';
     startApp();
@@ -1279,6 +1281,10 @@ function tryAutoLogin() {
     if (s && s.token && s.user) {
       state.currentUser  = s.user;
       state.sessionToken = s.token;
+      // 신규 API 응답 형식 호환: name→label, canEdit 기본값 설정
+      if (!state.currentUser.label) state.currentUser.label = state.currentUser.name || state.currentUser.id;
+      if (state.currentUser.canEdit === undefined) state.currentUser.canEdit = true;
+      if (!state.currentUser.actors) state.currentUser.actors = [];
       return true;
     }
     // 구버전 세션 형식 (id만 저장된 경우) → 재로그인 필요
