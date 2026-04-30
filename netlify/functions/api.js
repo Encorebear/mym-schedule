@@ -18,7 +18,7 @@ const SHEET_AUDIT  = process.env.SHEET_AUDIT  || '감사로그';
 const SHEET_CAR    = process.env.SHEET_CAR    || '차량기록';
 
 const DEFAULT_EVENT_HEADERS = ['id','actor','type','title','date','startTime','endTime','location','manager','memo','isPrivate','vehicle','color','category','completed','completedAt','completedBy','createdAt','updatedAt'];
-const DEFAULT_USER_HEADERS  = ['id','name','password','role'];
+const DEFAULT_USER_HEADERS  = ['id','name','password','role','actors'];
 const DEFAULT_AUDIT_HEADERS = ['timestamp','userId','auditAction','eventId','actor','title','date','details'];
 const DEFAULT_CAR_HEADERS   = ['id','date','vehicle','plate','type','handler','amount','memo'];
 
@@ -232,6 +232,11 @@ exports.handler = async (event) => {
       if (!user) return fail('아이디 또는 비밀번호가 올바르지 않습니다.');
       const sessionToken = Buffer.from(`${username}:${Date.now()}`).toString('base64');
       const { password: _pw, ...safeUser } = user;
+      // actors 필드: JSON 문자열이면 파싱, 아니면 빈 배열
+      if (typeof safeUser.actors === 'string') {
+        try { safeUser.actors = JSON.parse(safeUser.actors); } catch { safeUser.actors = []; }
+      }
+      if (!Array.isArray(safeUser.actors)) safeUser.actors = [];
       return ok({ user: safeUser, sessionToken });
     }
 
@@ -260,12 +265,23 @@ exports.handler = async (event) => {
     // LOAD USERS
     if (action === 'loadUsers') {
       const { data: users } = await readSheet(token, SHEET_USERS, CACHE_TTL_USERS);
-      return ok({ users: users.map(({ password: _pw, ...u }) => u) });
+      return ok({ users: users.map(({ password: _pw, ...u }) => {
+        // actors: JSON 문자열 → 배열로 파싱
+        if (typeof u.actors === 'string') {
+          try { u.actors = JSON.parse(u.actors); } catch { u.actors = []; }
+        }
+        if (!Array.isArray(u.actors)) u.actors = [];
+        return u;
+      }) });
     }
 
     // SAVE USERS
     if (action === 'saveUsers') {
-      const users   = body.users || [];
+      const users = (body.users || []).map(u => ({
+        ...u,
+        // actors: 배열 → JSON 문자열로 저장
+        actors: Array.isArray(u.actors) ? JSON.stringify(u.actors) : (u.actors || '[]')
+      }));
       const headers = await getHeaders(token, SHEET_USERS, DEFAULT_USER_HEADERS);
       await writeSheet(token, SHEET_USERS, users, headers);
       invalidate(SHEET_USERS);
