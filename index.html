@@ -1453,21 +1453,24 @@ function renderCalendar() {
       const donePrefix = ev.completed ? '✅ ' : '';
       if (isPrivate) {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
+        // 매니저 이름은 flex-shrink:1 → 공간 부족 시 줄어들어 배우코드가 항상 보임
         const mgrSpan = ev.manager
-          ? `<span style="flex-shrink:0;margin-left:3px;opacity:0.9;">${ev.manager}</span>`
+          ? `<span style="flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:2px;opacity:0.9;">${ev.manager}</span>`
           : '';
-        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:2px;">` +
-          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">🔒 [${ev.actor}] ${timePart}</span>` +
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;gap:2px;">` +
+          `<span style="flex-shrink:0;">🔒 [${ev.actor}]</span>` +
+          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;"> ${timePart}</span>` +
           mgrSpan +
           `</div>`;
       } else {
         const timePart = ev.startTime ? ev.startTime + ' ' : '';
-        const mainLabel = `${donePrefix}[${ev.actor}] ${timePart}${ev.title}`;
+        // 배우코드: flex-shrink:0 → 항상 표시 / 제목: flex:1 → 공간 있을 때만 / 매니저: flex-shrink:1 → 공간 부족 시 숨김
         const mgrSpan = ev.manager
-          ? `<span style="flex-shrink:0;margin-left:3px;opacity:0.9;">${ev.manager}</span>`
+          ? `<span style="flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:2px;opacity:0.9;">${ev.manager}</span>`
           : '';
-        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:2px;">` +
-          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${mainLabel}</span>` +
+        dots += `<div class="event-dot${doneClass}" style="background:${dotBg};color:${dotColor};${dotShadow}font-weight:700;display:flex;align-items:center;gap:2px;">` +
+          `<span style="flex-shrink:0;">${donePrefix}[${ev.actor}]</span>` +
+          `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;"> ${timePart}${ev.title}</span>` +
           mgrSpan +
           `</div>`;
       }
