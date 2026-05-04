@@ -1098,6 +1098,7 @@ const USERS_KEY     = 'mym_users_v1';
 const SETTINGS_KEY  = 'mym_settings_v1';
 const SESSION_KEY   = 'mym_session_v1';
 const BACKUPS_KEY   = 'mym_backups_v1';  // 자동 스냅샷 저장소
+const PENDING_KEY   = 'mym_pending_ids_v1'; // 서버에 아직 올라가지 않은 신규 이벤트 ID 목록
 const MAX_BACKUPS   = 10;                // 최대 보관 스냅샷 수
 const API_KEY       = '';   // 실제 키는 Netlify 환경변수에 저장 (서버에서만 사용)
 const DEFAULT_API   = '/.netlify/functions/api'; // 프록시를 통해 GAS URL 숨김
@@ -1137,6 +1138,10 @@ function loadAll() {
 }
 function saveEvents() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events)); }
 function saveUsers()  { localStorage.setItem(USERS_KEY, JSON.stringify(state.users)); pushUsersToServer(); }
+// Pending 헬퍼: 이 기기에서 생성했지만 서버에 아직 올라가지 않은 이벤트 ID 관리
+function getPendingIds()    { try { return new Set(JSON.parse(localStorage.getItem(PENDING_KEY) || '[]')); } catch(e) { return new Set(); } }
+function addPendingId(id)   { const s=getPendingIds(); s.add(id); localStorage.setItem(PENDING_KEY, JSON.stringify([...s])); }
+function clearPendingIds()  { localStorage.removeItem(PENDING_KEY); }
 
 // 유저 정보 서버 동기화
 async function pushUsersToServer() {
@@ -2133,6 +2138,7 @@ function submitEventForm(e) {
     showToast('수정되었습니다');
   } else {
     state.events.push(ev);
+    addPendingId(ev.id); // 서버 확인 전까지 보호 대상으로 등록
     logAudit('생성', ev);
     showToast('일정이 추가되었습니다');
   }
@@ -2866,10 +2872,14 @@ async function syncFromServer(showIndicator) {
           return base;
         });
 
-        // 로컬에만 있는 이벤트(서버 미반영) 추가
-        const localOnlyEvents = state.events.filter(ev => ev.id && !serverIds.has(ev.id));
+        // 로컬에만 있는 이벤트(서버 미반영 신규) 추가
+        // pending 목록에 있는 ID만 보존 — 없는 건 다른 기기에서 삭제된 것으로 간주
+        const pendingIds = getPendingIds();
+        const localOnlyEvents = state.events.filter(ev => ev.id && !serverIds.has(ev.id) && pendingIds.has(ev.id));
+        const droppedCount = state.events.filter(ev => ev.id && !serverIds.has(ev.id) && !pendingIds.has(ev.id)).length;
+        if (droppedCount > 0) console.log('[sync] 다른 기기에서 삭제된 이벤트 ' + droppedCount + '개 제거');
         if (localOnlyEvents.length > 0) {
-          console.log('[sync] 로컬 전용 이벤트 ' + localOnlyEvents.length + '개 병합 보존');
+          console.log('[sync] 로컬 신규 이벤트 ' + localOnlyEvents.length + '개 병합 보존');
           merged.push(...localOnlyEvents);
         }
 
@@ -2898,6 +2908,7 @@ async function pushAllToServer(showIndicator) {
       body: JSON.stringify({ action: 'save', sessionToken: state.sessionToken||'', events: state.events })
     });
     const data = JSON.parse(await res.text());
+    if (data.ok) clearPendingIds(); // 서버 저장 성공 → pending 목록 초기화
     if (showIndicator) showToast(data.ok ? '✅ 서버에 저장됐습니다 (' + state.events.length + '개)' : '❌ 저장 실패');
     return !!data.ok;
   } catch(e) {
