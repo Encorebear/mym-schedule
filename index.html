@@ -2905,13 +2905,30 @@ async function pushAllToServer(showIndicator) {
   if (!state.apiUrl) return false;
   if (showIndicator) showToast('📤 서버에 저장 중...');
   try {
+    // createdBy 누락된 비공개 이벤트 자동 복구: 현재 사용자를 생성자로 설정
+    const userId = state.currentUser && state.currentUser.id;
+    const eventsToSave = state.events.map(ev => {
+      if (ev.isPrivate && !ev.createdBy && userId) {
+        return { ...ev, createdBy: userId };
+      }
+      return ev;
+    });
     const res = await fetch(state.apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'save', sessionToken: state.sessionToken||'', events: state.events })
+      body: JSON.stringify({ action: 'save', sessionToken: state.sessionToken||'', events: eventsToSave })
     });
     const data = JSON.parse(await res.text());
-    if (data.ok) clearPendingIds(); // 서버 저장 성공 → pending 목록 초기화
+    if (data.ok) {
+      clearPendingIds(); // 서버 저장 성공 → pending 목록 초기화
+      // createdBy 복구 결과를 로컬 state에도 반영
+      if (userId) {
+        state.events.forEach(ev => {
+          if (ev.isPrivate && !ev.createdBy) ev.createdBy = userId;
+        });
+        saveEvents();
+      }
+    }
     if (showIndicator) showToast(data.ok ? '✅ 서버에 저장됐습니다 (' + state.events.length + '개)' : '❌ 저장 실패');
     return !!data.ok;
   } catch(e) {
