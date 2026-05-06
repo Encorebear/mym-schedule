@@ -17,7 +17,7 @@ const SHEET_USERS  = process.env.SHEET_USERS  || '사용자';
 const SHEET_AUDIT  = process.env.SHEET_AUDIT  || '감사로그';
 const SHEET_CAR    = process.env.SHEET_CAR    || '차량기록';
 
-const DEFAULT_EVENT_HEADERS = ['id','actor','type','title','date','startTime','endTime','location','manager','memo','isPrivate','vehicle','color','category','completed','completedAt','completedBy','createdAt','updatedAt'];
+const DEFAULT_EVENT_HEADERS = ['id','actor','type','title','date','startTime','endTime','location','manager','memo','isPrivate','vehicle','color','category','completed','completedAt','completedBy','createdAt','updatedAt','createdBy'];
 const DEFAULT_USER_HEADERS  = ['id','name','password','role','actors'];
 const DEFAULT_AUDIT_HEADERS = ['timestamp','userId','auditAction','eventId','actor','title','date','details'];
 const DEFAULT_CAR_HEADERS   = ['id','date','vehicle','plate','type','handler','amount','memo'];
@@ -255,7 +255,8 @@ exports.handler = async (event) => {
 
     // SAVE EVENTS
     if (action === 'save') {
-      const events  = body.events || [];
+      // sv_ 접두사 더미/캐시 이벤트 및 id 없는 행 제거
+      const events = (body.events || []).filter(ev => ev.id && !String(ev.id).startsWith('sv_'));
       const headers = await getHeaders(token, SHEET_EVENTS, DEFAULT_EVENT_HEADERS);
       await writeSheet(token, SHEET_EVENTS, events, headers);
       invalidate(SHEET_EVENTS);
