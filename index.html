@@ -2887,6 +2887,14 @@ async function syncFromServer(showIndicator) {
         }
 
         state.events = merged;
+        // createdBy 누락 비공개 이벤트 자동 복구: 로드 직후 수정 후 서버에 반영
+        const userId = state.currentUser && state.currentUser.id;
+        const needsRepair = userId && merged.some(ev => ev.type === PRIVATE_TYPE && !ev.createdBy);
+        if (needsRepair) {
+          merged.forEach(ev => { if (ev.type === PRIVATE_TYPE && !ev.createdBy) ev.createdBy = userId; });
+          console.log('[sync] createdBy 누락 비공개 이벤트 복구 후 서버에 저장');
+          pushAllToServer(false); // 비동기로 서버 업데이트 (렌더링 blocking 안 함)
+        }
         saveEvents();
         renderCurrentView();
         const extra = (hadDuplicates ? ', 중복 ' + (normalized.length - deduped.length) + '개 정리' : '') +
@@ -2905,10 +2913,10 @@ async function pushAllToServer(showIndicator) {
   if (!state.apiUrl) return false;
   if (showIndicator) showToast('📤 서버에 저장 중...');
   try {
-    // createdBy 누락된 비공개 이벤트 자동 복구: 현재 사용자를 생성자로 설정
+    // createdBy 누락된 비공개 이벤트 자동 복구 (isAdmin이면 전체, 아니면 자기 것만)
     const userId = state.currentUser && state.currentUser.id;
     const eventsToSave = state.events.map(ev => {
-      if (ev.isPrivate && !ev.createdBy && userId) {
+      if (ev.type === PRIVATE_TYPE && !ev.createdBy && userId) {
         return { ...ev, createdBy: userId };
       }
       return ev;
@@ -2924,7 +2932,7 @@ async function pushAllToServer(showIndicator) {
       // createdBy 복구 결과를 로컬 state에도 반영
       if (userId) {
         state.events.forEach(ev => {
-          if (ev.isPrivate && !ev.createdBy) ev.createdBy = userId;
+          if (ev.type === PRIVATE_TYPE && !ev.createdBy) ev.createdBy = userId;
         });
         saveEvents();
       }
